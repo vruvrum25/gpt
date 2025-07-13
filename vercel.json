@@ -12,6 +12,10 @@
   ],
   "routes": [
     {
+      "src": "/static/fp.js",
+      "dest": "/static/fp.js"
+    },
+    {
       "src": "/metrics/YOUR_AGENT_PATH",
       "dest": "/api/metrics/YOUR_AGENT_PATH.js"
     },
@@ -22,10 +26,6 @@
     {
       "src": "/metrics/YOUR_IDENTIFICATION_PATH/(.*)",
       "dest": "/api/metrics/YOUR_IDENTIFICATION_PATH/[...randomPathSegments].js"
-    },
-    {
-      "src": "/fp.js",
-      "dest": "/fp.js"
     },
     {
       "src": "/",
