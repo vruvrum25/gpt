@@ -1,0 +1,32 @@
+
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "api/**/*",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/metrics/YOUR_AGENT_PATH",
+      "dest": "/api/metrics/YOUR_AGENT_PATH.js"
+    },
+    {
+      "src": "/metrics/YOUR_IDENTIFICATION_PATH",
+      "dest": "/api/metrics/YOUR_IDENTIFICATION_PATH.js"
+    },
+    {
+      "src": "/metrics/YOUR_IDENTIFICATION_PATH/(.*)",
+      "dest": "/api/metrics/YOUR_IDENTIFICATION_PATH/[...randomPathSegments].js"
+    },
+    {
+      "src": "/",
+      "dest": "/index.html"
+    }
+  ]
+}

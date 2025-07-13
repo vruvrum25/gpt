@@ -1,0 +1,13 @@
+
+{
+  "name": "fingerprint-proxy-integration-html",
+  "version": "1.0.0",
+  "description": "Static site with custom proxy integration for FingerprintJS",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "vercel build",
+    "start": "vercel start"
+  },
+  "dependencies": {}
+}
