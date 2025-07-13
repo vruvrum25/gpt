@@ -1,15 +1,17 @@
 export default async function handler(req, res) {
   try {
+    console.log('=== Identification Request ===');
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    
     // Проверяем метод запроса
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    // Проверяем наличие прокси-секрета
-    if (!process.env.FPJS_PROXY_SECRET) {
-      throw new Error('FPJS_PROXY_SECRET environment variable is not set');
-    }
-
+    // 🔑 ВСТРОЕННЫЙ ПРОКСИ-СЕКРЕТ (для приватного репозитория)
+    const FPJS_PROXY_SECRET = 'xhio4GIKdPYHuOoD4u3w';
+    
     // Создаем URL для идентификации
     const identificationUrl = new URL('https://api.fpjs.io');
     
@@ -39,26 +41,29 @@ export default async function handler(req, res) {
     }
 
     // Добавляем обязательные заголовки Fingerprint
-    headers['FPJS-Proxy-Secret'] = process.env.FPJS_PROXY_SECRET;
+    headers['FPJS-Proxy-Secret'] = FPJS_PROXY_SECRET;
     headers['FPJS-Proxy-Client-IP'] = getClientIP(req);
     headers['FPJS-Proxy-Forwarded-Host'] = req.headers.host;
 
     // Получаем тело запроса
     const body = await getRawBody(req);
 
-    // Выполняем запрос к Fingerprint API (используем встроенный fetch)
+    console.log('Making request to Fingerprint API...');
+    
+    // Выполняем запрос к Fingerprint API
     const response = await fetch(identificationUrl.toString(), {
       method: 'POST',
       headers: headers,
       body: body,
     });
 
+    console.log('Fingerprint API response status:', response.status);
+
     // Получаем тело ответа
     const responseBody = await response.arrayBuffer();
 
     // Устанавливаем заголовки ответа
     for (const [key, value] of response.headers.entries()) {
-      // Пропускаем проблемные заголовки
       if (key.toLowerCase() !== 'strict-transport-security') {
         res.setHeader(key, value);
       }
@@ -74,7 +79,6 @@ export default async function handler(req, res) {
       timestamp: new Date().toISOString()
     });
     
-    // Возвращаем ошибку в формате Fingerprint
     const requestId = `${Date.now()}.${Math.random().toString(36).substr(2, 6)}`;
     
     res.status(500).json({
@@ -91,7 +95,6 @@ export default async function handler(req, res) {
 
 // Вспомогательная функция для получения IP клиента
 function getClientIP(req) {
-  // Проверяем различные заголовки в порядке приоритета
   const cfConnectingIp = req.headers['cf-connecting-ip'];
   const xRealIp = req.headers['x-real-ip'];
   const xForwardedFor = req.headers['x-forwarded-for'];
@@ -100,25 +103,22 @@ function getClientIP(req) {
   if (xRealIp) return xRealIp;
   if (xForwardedFor) return xForwardedFor.split(',')[0].trim();
   
-  // Fallback для разработки (замените на ваш публичный IP)
+  // Fallback для разработки
   return '8.8.8.8';
 }
 
 // Вспомогательная функция для получения raw body
 async function getRawBody(req) {
   if (req.body) {
-    // Если body уже обработано
     if (typeof req.body === 'string') {
       return req.body;
     }
     if (Buffer.isBuffer(req.body)) {
       return req.body;
     }
-    // Если это объект, преобразуем в JSON
     return JSON.stringify(req.body);
   }
   
-  // Если body не обработано, читаем поток
   return new Promise((resolve, reject) => {
     let body = '';
     req.on('data', chunk => {
