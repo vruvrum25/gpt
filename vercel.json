@@ -1,4 +1,3 @@
-
 {
   "version": 2,
   "builds": [
@@ -23,6 +22,10 @@
     {
       "src": "/metrics/YOUR_IDENTIFICATION_PATH/(.*)",
       "dest": "/api/metrics/YOUR_IDENTIFICATION_PATH/[...randomPathSegments].js"
+    },
+    {
+      "src": "/fp.js",
+      "dest": "/fp.js"
     },
     {
       "src": "/",
