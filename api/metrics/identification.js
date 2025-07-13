@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
     const FPJS_PROXY_SECRET = 'xhio4GIKdPYHuOoD4u3w';
     
-    // Создаем URL с расширенной диагностикой
+    // 🔧 ИСПРАВЛЕНИЕ: Используем правильный EU endpoint
     const identificationUrl = new URL('https://eu.api.fpjs.io');
     const originalUrl = new URL(req.url, `http://${req.headers.host}`);
     identificationUrl.search = originalUrl.search;
@@ -29,11 +29,29 @@ export default async function handler(req, res) {
 
     console.log('Target URL:', identificationUrl.toString());
 
-    // Подготавливаем заголовки с валидацией
-    const headers = { ...req.headers };
-    delete headers.cookie;
+    // 🔧 ИСПРАВЛЕНИЕ: Правильная подготовка заголовков
+    const headers = {};
+    
+    // Копируем только нужные заголовки
+    const allowedHeaders = [
+      'accept',
+      'accept-encoding', 
+      'accept-language',
+      'cache-control',
+      'content-type',
+      'user-agent',
+      'sec-fetch-dest',
+      'sec-fetch-mode',
+      'sec-fetch-site'
+    ];
+    
+    allowedHeaders.forEach(header => {
+      if (req.headers[header]) {
+        headers[header] = req.headers[header];
+      }
+    });
 
-    // Улучшенная обработка cookies
+    // Обрабатываем cookies - оставляем только _iidt
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
       const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
@@ -47,14 +65,13 @@ export default async function handler(req, res) {
       }
     }
 
-    // Валидация и установка Fingerprint заголовков
+    // Валидация IP и Host
     const clientIP = getClientIP(req);
     const forwardedHost = req.headers.host;
     
     console.log('Client IP:', clientIP);
     console.log('Forwarded Host:', forwardedHost);
     
-    // Проверяем валидность IP
     if (!isValidIP(clientIP)) {
       throw new Error(`Invalid client IP: ${clientIP}`);
     }
@@ -63,25 +80,27 @@ export default async function handler(req, res) {
       throw new Error('Missing host header');
     }
 
+    // 🔧 ИСПРАВЛЕНИЕ: Добавляем обязательные Fingerprint заголовки
     headers['FPJS-Proxy-Secret'] = FPJS_PROXY_SECRET;
     headers['FPJS-Proxy-Client-IP'] = clientIP;
     headers['FPJS-Proxy-Forwarded-Host'] = forwardedHost;
     
-    // Убираем проблемные заголовки
-    delete headers['host'];
-    delete headers['connection'];
-    delete headers['content-length'];
+    // 🔧 ИСПРАВЛЕНИЕ: Убеждаемся, что Content-Type правильный
+    if (!headers['content-type']) {
+      headers['content-type'] = 'application/json';
+    }
 
     console.log('Request headers to Fingerprint:', JSON.stringify(headers, null, 2));
 
+    // 🔧 ИСПРАВЛЕНИЕ: Улучшенная обработка тела запроса
     const body = await getRawBody(req);
     console.log('Request body length:', body.length);
+    console.log('Request body preview:', body.substring(0, 200));
 
     console.log('Making request to Fingerprint API...');
     
-    // Добавляем таймаут и обработку ошибок
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 секунд
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
     
     try {
       const response = await fetch(identificationUrl.toString(), {
@@ -89,8 +108,6 @@ export default async function handler(req, res) {
         headers: headers,
         body: body,
         signal: controller.signal,
-        // Дополнительные опции для отладки
-        keepalive: false,
       });
 
       clearTimeout(timeoutId);
@@ -146,7 +163,6 @@ export default async function handler(req, res) {
       method: req.method
     });
     
-    // CORS заголовки для ошибок
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Content-Type', 'application/json');
@@ -165,9 +181,7 @@ export default async function handler(req, res) {
   }
 }
 
-// Улучшенная функция получения IP
 function getClientIP(req) {
-  // Проверяем различные заголовки в порядке приоритета
   const cfConnectingIp = req.headers['cf-connecting-ip'];
   const xRealIp = req.headers['x-real-ip'];
   const xForwardedFor = req.headers['x-forwarded-for'];
@@ -185,40 +199,45 @@ function getClientIP(req) {
   if (xVercelForwardedFor) return xVercelForwardedFor.split(',')[0].trim();
   if (xForwardedFor) return xForwardedFor.split(',')[0].trim();
   
-  // Fallback - используйте ваш реальный публичный IP
+  // 🔧 ВАЖНО: Замените на ваш реальный публичный IP
   return '8.8.8.8';
 }
 
-// Функция валидации IP
 function isValidIP(ip) {
-  // Простая проверка IPv4
   const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-  // Простая проверка IPv6
   const ipv6Regex = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
   
   return ipv4Regex.test(ip) || ipv6Regex.test(ip);
 }
 
-// Функция получения raw body остается без изменений
+// 🔧 ИСПРАВЛЕНИЕ: Улучшенная функция получения raw body
 async function getRawBody(req) {
-  if (req.body) {
+  // Проверяем, есть ли уже обработанное тело
+  if (req.body !== undefined) {
     if (typeof req.body === 'string') {
       return req.body;
     }
     if (Buffer.isBuffer(req.body)) {
       return req.body;
     }
-    return JSON.stringify(req.body);
+    if (typeof req.body === 'object') {
+      return JSON.stringify(req.body);
+    }
   }
   
+  // Читаем raw тело из потока
   return new Promise((resolve, reject) => {
-    let body = '';
+    const chunks = [];
+    
     req.on('data', chunk => {
-      body += chunk.toString();
+      chunks.push(chunk);
     });
+    
     req.on('end', () => {
-      resolve(body);
+      const buffer = Buffer.concat(chunks);
+      resolve(buffer);
     });
+    
     req.on('error', reject);
   });
 }
