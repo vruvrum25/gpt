@@ -3,7 +3,6 @@ export default async function handler(req, res) {
     console.log('=== Identification Request Debug ===');
     console.log('Method:', req.method);
     console.log('URL:', req.url);
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
     
     // CORS заголовки
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -20,139 +19,115 @@ export default async function handler(req, res) {
     }
 
     const FPJS_PROXY_SECRET = 'xhio4GIKdPYHuOoD4u3w';
+    const FINGERPRINT_API = 'https://eu.api.fpjs.io';
     
-    // 🔧 ИСПРАВЛЕНИЕ: Используем правильный EU endpoint
-    const identificationUrl = new URL('https://eu.api.fpjs.io');
+    // 🔧 ИСПРАВЛЕНИЕ: Точно как в PHP - формируем URL
     const originalUrl = new URL(req.url, `http://${req.headers.host}`);
-    identificationUrl.search = originalUrl.search;
-    identificationUrl.searchParams.append('ii', 'custom-proxy-integration/1.0/ingress');
+    const query = originalUrl.search.substring(1); // Убираем '?' в начале
+    
+    // Базовый URL (без динамического пути для POST запросов)
+    let targetUrl = FINGERPRINT_API;
+    
+    // 🔧 ИСПРАВЛЕНИЕ: Добавляем query параметры точно как в PHP
+    if (req.method === 'POST') {
+      if (query) {
+        targetUrl += '?' + query + '&ii=custom-proxy-integration/1.0/ingress';
+      } else {
+        targetUrl += '?ii=custom-proxy-integration/1.0/ingress';
+      }
+    } else {
+      if (query) {
+        targetUrl += '?' + query;
+      }
+    }
 
-    console.log('Target URL:', identificationUrl.toString());
+    console.log('Target URL:', targetUrl);
 
-    // 🔧 ИСПРАВЛЕНИЕ: Правильная подготовка заголовков
+    // 🔧 ИСПРАВЛЕНИЕ: Копируем ВСЕ заголовки кроме cookie (как в PHP)
     const headers = {};
     
-    // Копируем только нужные заголовки
-    const allowedHeaders = [
-      'accept',
-      'accept-encoding', 
-      'accept-language',
-      'cache-control',
-      'content-type',
-      'user-agent',
-      'sec-fetch-dest',
-      'sec-fetch-mode',
-      'sec-fetch-site'
-    ];
-    
-    allowedHeaders.forEach(header => {
-      if (req.headers[header]) {
-        headers[header] = req.headers[header];
+    // Копируем все заголовки кроме cookie
+    for (const [key, value] of Object.entries(req.headers)) {
+      if (key.toLowerCase() !== 'cookie') {
+        headers[key] = value;
       }
-    });
+    }
 
-    // Обрабатываем cookies - оставляем только _iidt
+    // 🔧 ИСПРАВЛЕНИЕ: Фильтрация _iidt cookie точно как в PHP
+    function filterIidtCookie(cookieString) {
+      if (!cookieString) return '';
+      const match = cookieString.match(/_iidt=([^;]+)/);
+      return match ? `_iidt=${match[1]}` : '';
+    }
+
+    // Добавляем только _iidt cookie если есть
     const cookieHeader = req.headers.cookie;
-    if (cookieHeader) {
-      const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
-        const [key, value] = cookie.trim().split('=');
-        if (key && value) acc[key] = value;
-        return acc;
-      }, {});
+    const iidtCookie = filterIidtCookie(cookieHeader);
+    if (iidtCookie) {
+      headers.cookie = iidtCookie;
+    }
+
+    // 🔧 ИСПРАВЛЕНИЕ: Добавляем прокси-заголовки только для POST (как в PHP)
+    if (req.method === 'POST') {
+      const clientIP = getClientIP(req);
+      const forwardedHost = req.headers.host;
       
-      if (cookies._iidt) {
-        headers.cookie = `_iidt=${cookies._iidt}`;
-      }
-    }
-
-    // Валидация IP и Host
-    const clientIP = getClientIP(req);
-    const forwardedHost = req.headers.host;
-    
-    console.log('Client IP:', clientIP);
-    console.log('Forwarded Host:', forwardedHost);
-    
-    if (!isValidIP(clientIP)) {
-      throw new Error(`Invalid client IP: ${clientIP}`);
-    }
-    
-    if (!forwardedHost) {
-      throw new Error('Missing host header');
-    }
-
-    // 🔧 ИСПРАВЛЕНИЕ: Добавляем обязательные Fingerprint заголовки
-    headers['FPJS-Proxy-Secret'] = FPJS_PROXY_SECRET;
-    headers['FPJS-Proxy-Client-IP'] = clientIP;
-    headers['FPJS-Proxy-Forwarded-Host'] = forwardedHost;
-    
-    // 🔧 ИСПРАВЛЕНИЕ: Убеждаемся, что Content-Type правильный
-    if (!headers['content-type']) {
-      headers['content-type'] = 'application/json';
+      console.log('Client IP:', clientIP);
+      console.log('Forwarded Host:', forwardedHost);
+      
+      headers['FPJS-Proxy-Secret'] = FPJS_PROXY_SECRET;
+      headers['FPJS-Proxy-Client-IP'] = clientIP;
+      headers['FPJS-Proxy-Forwarded-Host'] = forwardedHost;
     }
 
     console.log('Request headers to Fingerprint:', JSON.stringify(headers, null, 2));
 
-    // 🔧 ИСПРАВЛЕНИЕ: Улучшенная обработка тела запроса
+    // 🔧 ИСПРАВЛЕНИЕ: Читаем raw body точно как в PHP (file_get_contents('php://input'))
     const body = await getRawBody(req);
     console.log('Request body length:', body.length);
-    console.log('Request body preview:', body.substring(0, 200));
+    
+    // Показываем первые символы тела для отладки
+    if (body.length > 0) {
+      console.log('Request body preview:', body.toString().substring(0, 100));
+    }
 
     console.log('Making request to Fingerprint API...');
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
-    
-    try {
-      const response = await fetch(identificationUrl.toString(), {
-        method: 'POST',
-        headers: headers,
-        body: body,
-        signal: controller.signal,
-      });
+    // 🔧 ИСПРАВЛЕНИЕ: Простой fetch без лишних опций
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers: headers,
+      body: req.method === 'POST' ? body : undefined,
+    });
 
-      clearTimeout(timeoutId);
-      
-      console.log('Fingerprint API response status:', response.status);
-      console.log('Fingerprint API response headers:', Object.fromEntries(response.headers.entries()));
+    console.log('Fingerprint API response status:', response.status);
+    console.log('Fingerprint API response headers:', Object.fromEntries(response.headers.entries()));
 
-      if (!response.ok) {
-        console.error('Fingerprint API error response');
-        const errorText = await response.text();
-        console.error('Error body:', errorText);
-        throw new Error(`Fingerprint API returned ${response.status}: ${errorText}`);
-      }
-
-      const responseBody = await response.arrayBuffer();
-      console.log('Response body length:', responseBody.byteLength);
-
-      // Устанавливаем заголовки ответа
-      for (const [key, value] of response.headers.entries()) {
-        if (key.toLowerCase() !== 'strict-transport-security') {
-          res.setHeader(key, value);
-        }
-      }
-      
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-      res.status(response.status).send(Buffer.from(responseBody));
-      
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-      
-      if (fetchError.name === 'AbortError') {
-        throw new Error('Request timeout after 25 seconds');
-      }
-      
-      console.error('Fetch error details:', {
-        name: fetchError.name,
-        message: fetchError.message,
-        cause: fetchError.cause,
-        stack: fetchError.stack
-      });
-      
-      throw fetchError;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Fingerprint API error:', errorText);
+      throw new Error(`Fingerprint API returned ${response.status}: ${errorText}`);
     }
+
+    // 🔧 ИСПРАВЛЕНИЕ: Получаем тело как ArrayBuffer
+    const responseBody = await response.arrayBuffer();
+    console.log('Response body length:', responseBody.byteLength);
+
+    // 🔧 ИСПРАВЛЕНИЕ: Копируем заголовки ответа (исключаем проблемные)
+    for (const [key, value] of response.headers.entries()) {
+      const lowerKey = key.toLowerCase();
+      if (lowerKey !== 'strict-transport-security' && 
+          lowerKey !== 'transfer-encoding') {
+        res.setHeader(key, value);
+      }
+    }
+    
+    // Добавляем CORS заголовки
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    // Отправляем ответ с тем же статус кодом
+    res.status(response.status).send(Buffer.from(responseBody));
 
   } catch (error) {
     console.error('Identification error:', {
@@ -181,51 +156,20 @@ export default async function handler(req, res) {
   }
 }
 
+// 🔧 ИСПРАВЛЕНИЕ: Точная копия PHP логики getClientIp()
 function getClientIP(req) {
-  const cfConnectingIp = req.headers['cf-connecting-ip'];
-  const xRealIp = req.headers['x-real-ip'];
   const xForwardedFor = req.headers['x-forwarded-for'];
-  const xVercelForwardedFor = req.headers['x-vercel-forwarded-for'];
-  
-  console.log('IP headers:', {
-    'cf-connecting-ip': cfConnectingIp,
-    'x-real-ip': xRealIp,
-    'x-forwarded-for': xForwardedFor,
-    'x-vercel-forwarded-for': xVercelForwardedFor
-  });
-  
-  if (cfConnectingIp) return cfConnectingIp;
-  if (xRealIp) return xRealIp;
-  if (xVercelForwardedFor) return xVercelForwardedFor.split(',')[0].trim();
-  if (xForwardedFor) return xForwardedFor.split(',')[0].trim();
-  
-  // 🔧 ВАЖНО: Замените на ваш реальный публичный IP
-  return '8.8.8.8';
-}
-
-function isValidIP(ip) {
-  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
-  const ipv6Regex = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
-  
-  return ipv4Regex.test(ip) || ipv6Regex.test(ip);
-}
-
-// 🔧 ИСПРАВЛЕНИЕ: Улучшенная функция получения raw body
-async function getRawBody(req) {
-  // Проверяем, есть ли уже обработанное тело
-  if (req.body !== undefined) {
-    if (typeof req.body === 'string') {
-      return req.body;
-    }
-    if (Buffer.isBuffer(req.body)) {
-      return req.body;
-    }
-    if (typeof req.body === 'object') {
-      return JSON.stringify(req.body);
-    }
+  if (xForwardedFor) {
+    const ips = xForwardedFor.split(',');
+    return ips[0].trim();
   }
-  
-  // Читаем raw тело из потока
+  return req.headers['x-real-ip'] || 
+         req.headers['cf-connecting-ip'] || 
+         '8.8.8.8'; // Fallback
+}
+
+// 🔧 ИСПРАВЛЕНИЕ: Точная копия PHP file_get_contents('php://input')
+async function getRawBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     
@@ -234,6 +178,7 @@ async function getRawBody(req) {
     });
     
     req.on('end', () => {
+      // Возвращаем Buffer, точно как PHP
       const buffer = Buffer.concat(chunks);
       resolve(buffer);
     });
