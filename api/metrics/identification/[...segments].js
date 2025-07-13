@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       });
     }
     
-    const browserCacheUrl = new URL(`https://api.fpjs.io/${randomPath}`);
+    const browserCacheUrl = new URL(`https://eu.api.fpjs.io/${randomPath}`);
     
     const originalUrl = new URL(req.url, `http://${req.headers.host}`);
     originalUrl.searchParams.forEach((value, key) => {
