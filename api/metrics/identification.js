@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
     const FPJS_PROXY_SECRET = 'xhio4GIKdPYHuOoD4u3w';
     
-    const identificationUrl = new URL('https://api.fpjs.io');
+    const identificationUrl = new URL('https://eu.api.fpjs.io');
     const originalUrl = new URL(req.url, `http://${req.headers.host}`);
     identificationUrl.search = originalUrl.search;
     identificationUrl.searchParams.append('ii', 'custom-proxy-integration/1.0/ingress');
