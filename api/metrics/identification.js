@@ -1,32 +1,34 @@
 export default async function handler(req, res) {
   try {
+    // 🔧 ДОБАВЛЯЕМ CORS ЗАГОЛОВКИ В НАЧАЛЕ
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-fpjs-client-version');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    // Обрабатываем preflight OPTIONS запрос
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    
     console.log('=== Identification Request ===');
     console.log('Method:', req.method);
     console.log('URL:', req.url);
     
-    // Проверяем метод запроса
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    // 🔑 ВСТРОЕННЫЙ ПРОКСИ-СЕКРЕТ (для приватного репозитория)
     const FPJS_PROXY_SECRET = 'xhio4GIKdPYHuOoD4u3w';
     
-    // Создаем URL для идентификации
     const identificationUrl = new URL('https://api.fpjs.io');
-    
-    // Переносим query параметры
     const originalUrl = new URL(req.url, `http://${req.headers.host}`);
     identificationUrl.search = originalUrl.search;
-    
-    // Добавляем параметр мониторинга (обязательно!)
     identificationUrl.searchParams.append('ii', 'custom-proxy-integration/1.0/ingress');
 
-    // Подготавливаем заголовки (убираем cookies)
     const headers = { ...req.headers };
     delete headers.cookie;
 
-    // Обрабатываем cookies - оставляем только _iidt
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
       const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
@@ -40,17 +42,14 @@ export default async function handler(req, res) {
       }
     }
 
-    // Добавляем обязательные заголовки Fingerprint
     headers['FPJS-Proxy-Secret'] = FPJS_PROXY_SECRET;
     headers['FPJS-Proxy-Client-IP'] = getClientIP(req);
     headers['FPJS-Proxy-Forwarded-Host'] = req.headers.host;
 
-    // Получаем тело запроса
     const body = await getRawBody(req);
 
     console.log('Making request to Fingerprint API...');
     
-    // Выполняем запрос к Fingerprint API
     const response = await fetch(identificationUrl.toString(), {
       method: 'POST',
       headers: headers,
@@ -59,17 +58,19 @@ export default async function handler(req, res) {
 
     console.log('Fingerprint API response status:', response.status);
 
-    // Получаем тело ответа
     const responseBody = await response.arrayBuffer();
 
-    // Устанавливаем заголовки ответа
+    // 🔧 СОХРАНЯЕМ CORS ЗАГОЛОВКИ ПРИ КОПИРОВАНИИ
     for (const [key, value] of response.headers.entries()) {
       if (key.toLowerCase() !== 'strict-transport-security') {
         res.setHeader(key, value);
       }
     }
+    
+    // 🔧 УБЕЖДАЕМСЯ ЧТО CORS ЗАГОЛОВКИ ОСТАЛИСЬ
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-    // Возвращаем ответ
     res.status(response.status).send(Buffer.from(responseBody));
 
   } catch (error) {
@@ -78,6 +79,11 @@ export default async function handler(req, res) {
       stack: error.stack,
       timestamp: new Date().toISOString()
     });
+    
+    // 🔧 CORS ЗАГОЛОВКИ ДЛЯ ОШИБОК
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Content-Type', 'application/json');
     
     const requestId = `${Date.now()}.${Math.random().toString(36).substr(2, 6)}`;
     
@@ -93,7 +99,7 @@ export default async function handler(req, res) {
   }
 }
 
-// Вспомогательная функция для получения IP клиента
+// Вспомогательные функции остаются без изменений
 function getClientIP(req) {
   const cfConnectingIp = req.headers['cf-connecting-ip'];
   const xRealIp = req.headers['x-real-ip'];
@@ -103,11 +109,9 @@ function getClientIP(req) {
   if (xRealIp) return xRealIp;
   if (xForwardedFor) return xForwardedFor.split(',')[0].trim();
   
-  // Fallback для разработки
   return '8.8.8.8';
 }
 
-// Вспомогательная функция для получения raw body
 async function getRawBody(req) {
   if (req.body) {
     if (typeof req.body === 'string') {
