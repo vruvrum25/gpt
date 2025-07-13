@@ -1,19 +1,19 @@
 export default async function handler(req, res) {
   try {
-    // 🔧 ДОБАВЛЯЕМ CORS ЗАГОЛОВКИ В НАЧАЛЕ
+    console.log('=== Identification Request Debug ===');
+    console.log('Method:', req.method);
+    console.log('URL:', req.url);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    
+    // CORS заголовки
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-fpjs-client-version');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     
-    // Обрабатываем preflight OPTIONS запрос
     if (req.method === 'OPTIONS') {
       return res.status(200).end();
     }
-    
-    console.log('=== Identification Request ===');
-    console.log('Method:', req.method);
-    console.log('URL:', req.url);
     
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method Not Allowed' });
@@ -21,14 +21,19 @@ export default async function handler(req, res) {
 
     const FPJS_PROXY_SECRET = 'xhio4GIKdPYHuOoD4u3w';
     
+    // Создаем URL с расширенной диагностикой
     const identificationUrl = new URL('https://eu.api.fpjs.io');
     const originalUrl = new URL(req.url, `http://${req.headers.host}`);
     identificationUrl.search = originalUrl.search;
     identificationUrl.searchParams.append('ii', 'custom-proxy-integration/1.0/ingress');
 
+    console.log('Target URL:', identificationUrl.toString());
+
+    // Подготавливаем заголовки с валидацией
     const headers = { ...req.headers };
     delete headers.cookie;
 
+    // Улучшенная обработка cookies
     const cookieHeader = req.headers.cookie;
     if (cookieHeader) {
       const cookies = cookieHeader.split(';').reduce((acc, cookie) => {
@@ -42,45 +47,106 @@ export default async function handler(req, res) {
       }
     }
 
+    // Валидация и установка Fingerprint заголовков
+    const clientIP = getClientIP(req);
+    const forwardedHost = req.headers.host;
+    
+    console.log('Client IP:', clientIP);
+    console.log('Forwarded Host:', forwardedHost);
+    
+    // Проверяем валидность IP
+    if (!isValidIP(clientIP)) {
+      throw new Error(`Invalid client IP: ${clientIP}`);
+    }
+    
+    if (!forwardedHost) {
+      throw new Error('Missing host header');
+    }
+
     headers['FPJS-Proxy-Secret'] = FPJS_PROXY_SECRET;
-    headers['FPJS-Proxy-Client-IP'] = getClientIP(req);
-    headers['FPJS-Proxy-Forwarded-Host'] = req.headers.host;
+    headers['FPJS-Proxy-Client-IP'] = clientIP;
+    headers['FPJS-Proxy-Forwarded-Host'] = forwardedHost;
+    
+    // Убираем проблемные заголовки
+    delete headers['host'];
+    delete headers['connection'];
+    delete headers['content-length'];
+
+    console.log('Request headers to Fingerprint:', JSON.stringify(headers, null, 2));
 
     const body = await getRawBody(req);
+    console.log('Request body length:', body.length);
 
     console.log('Making request to Fingerprint API...');
     
-    const response = await fetch(identificationUrl.toString(), {
-      method: 'POST',
-      headers: headers,
-      body: body,
-    });
-
-    console.log('Fingerprint API response status:', response.status);
-
-    const responseBody = await response.arrayBuffer();
-
-    // 🔧 СОХРАНЯЕМ CORS ЗАГОЛОВКИ ПРИ КОПИРОВАНИИ
-    for (const [key, value] of response.headers.entries()) {
-      if (key.toLowerCase() !== 'strict-transport-security') {
-        res.setHeader(key, value);
-      }
-    }
+    // Добавляем таймаут и обработку ошибок
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 секунд
     
-    // 🔧 УБЕЖДАЕМСЯ ЧТО CORS ЗАГОЛОВКИ ОСТАЛИСЬ
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    try {
+      const response = await fetch(identificationUrl.toString(), {
+        method: 'POST',
+        headers: headers,
+        body: body,
+        signal: controller.signal,
+        // Дополнительные опции для отладки
+        keepalive: false,
+      });
 
-    res.status(response.status).send(Buffer.from(responseBody));
+      clearTimeout(timeoutId);
+      
+      console.log('Fingerprint API response status:', response.status);
+      console.log('Fingerprint API response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        console.error('Fingerprint API error response');
+        const errorText = await response.text();
+        console.error('Error body:', errorText);
+        throw new Error(`Fingerprint API returned ${response.status}: ${errorText}`);
+      }
+
+      const responseBody = await response.arrayBuffer();
+      console.log('Response body length:', responseBody.byteLength);
+
+      // Устанавливаем заголовки ответа
+      for (const [key, value] of response.headers.entries()) {
+        if (key.toLowerCase() !== 'strict-transport-security') {
+          res.setHeader(key, value);
+        }
+      }
+      
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+      res.status(response.status).send(Buffer.from(responseBody));
+      
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request timeout after 25 seconds');
+      }
+      
+      console.error('Fetch error details:', {
+        name: fetchError.name,
+        message: fetchError.message,
+        cause: fetchError.cause,
+        stack: fetchError.stack
+      });
+      
+      throw fetchError;
+    }
 
   } catch (error) {
     console.error('Identification error:', {
       error: error.message,
       stack: error.stack,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      url: req.url,
+      method: req.method
     });
     
-    // 🔧 CORS ЗАГОЛОВКИ ДЛЯ ОШИБОК
+    // CORS заголовки для ошибок
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Content-Type', 'application/json');
@@ -99,19 +165,41 @@ export default async function handler(req, res) {
   }
 }
 
-// Вспомогательные функции остаются без изменений
+// Улучшенная функция получения IP
 function getClientIP(req) {
+  // Проверяем различные заголовки в порядке приоритета
   const cfConnectingIp = req.headers['cf-connecting-ip'];
   const xRealIp = req.headers['x-real-ip'];
   const xForwardedFor = req.headers['x-forwarded-for'];
+  const xVercelForwardedFor = req.headers['x-vercel-forwarded-for'];
+  
+  console.log('IP headers:', {
+    'cf-connecting-ip': cfConnectingIp,
+    'x-real-ip': xRealIp,
+    'x-forwarded-for': xForwardedFor,
+    'x-vercel-forwarded-for': xVercelForwardedFor
+  });
   
   if (cfConnectingIp) return cfConnectingIp;
   if (xRealIp) return xRealIp;
+  if (xVercelForwardedFor) return xVercelForwardedFor.split(',')[0].trim();
   if (xForwardedFor) return xForwardedFor.split(',')[0].trim();
   
+  // Fallback - используйте ваш реальный публичный IP
   return '8.8.8.8';
 }
 
+// Функция валидации IP
+function isValidIP(ip) {
+  // Простая проверка IPv4
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  // Простая проверка IPv6
+  const ipv6Regex = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+  
+  return ipv4Regex.test(ip) || ipv6Regex.test(ip);
+}
+
+// Функция получения raw body остается без изменений
 async function getRawBody(req) {
   if (req.body) {
     if (typeof req.body === 'string') {
