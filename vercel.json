@@ -1,4 +1,3 @@
-
 {
   "version": 2,
   "builds": [
@@ -12,6 +11,17 @@
     }
   ],
   "routes": [
+    // Обслуживание fp.js из папки static
+    {
+      "src": "/static/fp.js",
+      "dest": "/static/fp.js"
+    },
+    // Обслуживание fp.js из папки public
+    {
+      "src": "/fp.js",
+      "dest": "/public/fp.js"
+    },
+    // Прокси для других API путей
     {
       "src": "/metrics/YOUR_AGENT_PATH",
       "dest": "/api/metrics/YOUR_AGENT_PATH.js"
@@ -24,6 +34,7 @@
       "src": "/metrics/YOUR_IDENTIFICATION_PATH/(.*)",
       "dest": "/api/metrics/YOUR_IDENTIFICATION_PATH/[...randomPathSegments].js"
     },
+    // Статический путь для главной страницы
     {
       "src": "/",
       "dest": "/index.html"
