@@ -16,12 +16,12 @@
       "dest": "/api/metrics/agent.js"
     },
     {
-      "src": "/metrics/identification",
+      "src": "/metrics/identification$",
       "dest": "/api/metrics/identification.js"
     },
     {
       "src": "/metrics/identification/(.*)",
-      "dest": "/api/metrics/random.js"
+      "dest": "/api/metrics/identification/[...segments].js"
     },
     {
       "src": "/fp.js",
