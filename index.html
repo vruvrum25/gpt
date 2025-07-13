@@ -1,38 +1,206 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fingerprint Proxy Integration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .loading {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .result-item {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            font-family: monospace;
+        }
+        .result-label {
+            font-weight: bold;
+            color: #495057;
+        }
+        .result-value {
+            color: #007bff;
+            word-break: break-all;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
 <body>
-    <h1>Welcome to the Fingerprint Proxy Integration!</h1>
-    <p>This page is served via a custom proxy integration using Vercel!</p>
-
-  <script type="module">
-(async () => {
-    try {
-        // Укажите свой путь для проксированного API (например, /metrics/identify)
-        const CONFIG_API = '/metrics/YOUR_IDENTIFICATION_PATH'; 
+    <div class="container">
+        <h1>🔍 Fingerprint Proxy Integration</h1>
+        <p>Эта страница использует кастомную прокси-интеграцию через Vercel!</p>
         
-        // Динамический импорт FingerprintJS
-        const FingerprintJS = await import('/fp.js');
+        <div id="status" class="status loading">
+            ⏳ Инициализация Fingerprint...
+        </div>
         
-        // Загружаем FingerprintJS с вашим прокси-сервером
-        const fp = await FingerprintJS.load({
-            region: 'eu',  // Оставьте регион 'eu' для Европы, если это ваш регион
-            endpoint: [CONFIG_API, FingerprintJS.defaultEndpoint]  // Указываем ваш прокси API
-        });
+        <div id="controls">
+            <button id="getFingerprint" onclick="getFingerprint()" disabled>
+                🔄 Получить новый отпечаток
+            </button>
+            <button id="clearResults" onclick="clearResults()">
+                🗑️ Очистить результаты
+            </button>
+        </div>
+        
+        <div id="results"></div>
+    </div>
 
-        // Получаем идентификацию
-        const { requestId } = await fp.get({ extendedResult: true });
-        console.log('Fingerprint Request ID:', requestId);
-    } catch (error) {
-        console.error('FingerprintJS initialization failed:', error);
-    }
-})();
-</script>
-
+    <script type="module">
+        let fp = null;
+        
+        // Функция для обновления статуса
+        function updateStatus(message, type = 'loading') {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+        }
+        
+        // Функция для отображения результата
+        function displayResult(label, value) {
+            const resultsEl = document.getElementById('results');
+            const resultItem = document.createElement('div');
+            resultItem.className = 'result-item';
+            resultItem.innerHTML = `
+                <div class="result-label">${label}:</div>
+                <div class="result-value">${value}</div>
+            `;
+            resultsEl.appendChild(resultItem);
+        }
+        
+        // Функция для форматирования времени
+        function formatTimestamp(timestamp) {
+            return new Date(timestamp).toLocaleString('ru-RU');
+        }
+        
+        // Основная функция получения отпечатка
+        window.getFingerprint = async function() {
+            try {
+                updateStatus('🔄 Получение отпечатка...', 'loading');
+                document.getElementById('getFingerprint').disabled = true;
+                
+                // Получаем идентификацию
+                const result = await fp.get({ extendedResult: true });
+                
+                // Отображаем результаты на странице
+                displayResult('🆔 Request ID', result.requestId);
+                displayResult('👤 Visitor ID', result.visitorId);
+                displayResult('🔒 Confidence Score', result.confidence.score);
+                displayResult('⏰ Timestamp', formatTimestamp(result.timestamp));
+                
+                // Дополнительная информация если доступна
+                if (result.incognito !== undefined) {
+                    displayResult('🕵️ Incognito Mode', result.incognito ? 'Да' : 'Нет');
+                }
+                
+                if (result.browserName) {
+                    displayResult('🌐 Browser', `${result.browserName} ${result.browserVersion || ''}`);
+                }
+                
+                if (result.os) {
+                    displayResult('💻 Operating System', `${result.os} ${result.osVersion || ''}`);
+                }
+                
+                // Логируем в консоль для разработчиков
+                console.log('🔍 Полный результат Fingerprint:', result);
+                console.log('📋 Request ID:', result.requestId);
+                
+                updateStatus('✅ Отпечаток успешно получен!', 'success');
+                
+            } catch (error) {
+                console.error('❌ Ошибка получения отпечатка:', error);
+                updateStatus(`❌ Ошибка: ${error.message}`, 'error');
+                displayResult('❌ Ошибка', error.message);
+            } finally {
+                document.getElementById('getFingerprint').disabled = false;
+            }
+        };
+        
+        // Функция очистки результатов
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+            updateStatus('📝 Результаты очищены', 'loading');
+        };
+        
+        // Инициализация при загрузке страницы
+        (async () => {
+            try {
+                updateStatus('⏳ Загрузка Fingerprint library...', 'loading');
+                
+                // Укажите свой путь для проксированного API
+                const CONFIG_API = '/metrics/YOUR_IDENTIFICATION_PATH'; 
+                
+                // Динамический импорт FingerprintJS
+                const FingerprintJS = await import('/fp.js');
+                
+                updateStatus('🔧 Настройка прокси-интеграции...', 'loading');
+                
+                // Загружаем FingerprintJS с вашим прокси-сервером
+                fp = await FingerprintJS.load({
+                    region: 'eu',  // Ваш регион
+                    endpoint: [CONFIG_API, FingerprintJS.defaultEndpoint]  // Прокси + fallback
+                });
+                
+                updateStatus('✅ Fingerprint готов к использованию!', 'success');
+                document.getElementById('getFingerprint').disabled = false;
+                
+                // Автоматически получаем первый отпечаток
+                await getFingerprint();
+                
+            } catch (error) {
+                console.error('❌ Ошибка инициализации FingerprintJS:', error);
+                updateStatus(`❌ Ошибка инициализации: ${error.message}`, 'error');
+                displayResult('❌ Ошибка инициализации', error.message);
+            }
+        })();
+    </script>
 </body>
 </html>
