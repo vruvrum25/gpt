@@ -34,7 +34,7 @@
       "src": "/metrics/YOUR_IDENTIFICATION_PATH/(.*)",
       "dest": "/api/metrics/YOUR_IDENTIFICATION_PATH/[...randomPathSegments].js"
     },
-    // Статический путь для главной страницы
+   
     {
       "src": "/",
       "dest": "/index.html"
