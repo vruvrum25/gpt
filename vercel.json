@@ -1,5 +1,4 @@
 {
-
   "version": 2,
   "builds": [
     {
@@ -12,6 +11,10 @@
     }
   ],
   "routes": [
+    {
+      "src": "/fp.js",
+      "dest": "/fp.js"
+    },
     {
       "src": "/metrics/YOUR_AGENT_PATH",
       "dest": "/api/metrics/YOUR_AGENT_PATH.js"
