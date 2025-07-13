@@ -11,17 +11,17 @@
     }
   ],
   "routes": [
-    // Обслуживание fp.js из папки static
+  
     {
       "src": "/static/fp.js",
       "dest": "/static/fp.js"
     },
-    // Обслуживание fp.js из папки public
+  
     {
       "src": "/fp.js",
       "dest": "/public/fp.js"
     },
-    // Прокси для других API путей
+  
     {
       "src": "/metrics/YOUR_AGENT_PATH",
       "dest": "/api/metrics/YOUR_AGENT_PATH.js"
