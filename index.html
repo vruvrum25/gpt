@@ -17,7 +17,7 @@
         const CONFIG_API = '/metrics/YOUR_IDENTIFICATION_PATH'; 
         
         // Динамический импорт FingerprintJS
-        const FingerprintJS = await import('/static/fp.js');
+        const FingerprintJS = await import('/fp.js');
         
         // Загружаем FingerprintJS с вашим прокси-сервером
         const fp = await FingerprintJS.load({
