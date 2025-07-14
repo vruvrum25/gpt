@@ -13,15 +13,15 @@
   "routes": [
     {
       "src": "/metrics/agent",
-      "dest": "/api/metrics/agent.js"
+      "dest": "/api/fingerprint-proxy.js"
     },
     {
       "src": "/metrics/identification$",
-      "dest": "/api/metrics/identification.js"
+      "dest": "/api/fingerprint-proxy.js"
     },
     {
       "src": "/metrics/identification/(.*)",
-      "dest": "/api/metrics/identification/[...segments].js"
+      "dest": "/api/fingerprint-proxy.js"
     },
     {
       "src": "/fp.js",
