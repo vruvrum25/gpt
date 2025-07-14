@@ -12,10 +12,6 @@
   ],
   "routes": [
     {
-      "src": "/metrics/agent",
-      "dest": "/api/fingerprint-proxy.js"
-    },
-    {
       "src": "/metrics/identification$",
       "dest": "/api/fingerprint-proxy.js"
     },
