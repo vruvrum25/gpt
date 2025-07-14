@@ -223,58 +223,50 @@
             updateStatus('📝 Результаты очищены', 'loading');
         };
         
-        // Инициализация при загрузке страницы
-        (async () => {
-            try {
-                updateStatus('⏳ Загрузка Fingerprint library...', 'loading');
-                displayDebug('🔧 Начинаем инициализацию...');
-                
-                // 🔧 ОБНОВЛЕННАЯ КОНФИГУРАЦИЯ для объединенного прокси
-                const PROXY_ENDPOINT = '/metrics/identification';
-                const PROXY_AGENT = '/metrics/agent';
-                
-                displayDebug(`📡 Используем endpoints: ${PROXY_ENDPOINT}, ${PROXY_AGENT}`);
-                
-                // Динамический импорт FingerprintJS
-                const FingerprintJS = await import('/fp.js');
-                displayDebug('✅ FingerprintJS загружен');
-                
-                updateStatus('🔧 Настройка прокси-интеграции...', 'loading');
-                
-                // 🔧 КРИТИЧНО: Загружаем FingerprintJS с полной прокси-конфигурацией
-                fp = await FingerprintJS.load({
-                    region: 'eu',  // Ваш регион
-                    
-                    // 🔧 НОВОЕ: Добавляем scriptUrlPattern для agent download
-                    scriptUrlPattern: [
-                        `${PROXY_AGENT}?apiKey=<apiKey>&version=<version>&loaderVersion=<loaderVersion>`,
-                        FingerprintJS.defaultScriptUrlPattern  // Fallback
-                    ],
-                    
-                    // 🔧 Endpoint для identification requests
-                    endpoint: [
-                        PROXY_ENDPOINT,
-                        FingerprintJS.defaultEndpoint  // Fallback
-                    ]
-                });
-                
-                displayDebug('✅ FingerprintJS сконфигурирован с прокси');
-                
-                updateStatus('✅ Fingerprint готов к использованию!', 'success');
-                document.getElementById('getFingerprint').disabled = false;
-                
-                displayDebug('🎯 Инициализация завершена успешно');
-                
-                // Автоматически получаем первый отпечаток
-                await getFingerprint();
-                
-            } catch (error) {
-                console.error('❌ Ошибка инициализации FingerprintJS:', error);
-                updateStatus(`❌ Ошибка инициализации: ${error.message}`, 'error');
-                displayResult('❌ Ошибка инициализации', error.message);
-                displayDebug(`❌ Ошибка инициализации: ${error.message}`);
-            }
-        })();
-    </script>
+       // Инициализация (ИСПРАВЛЕНО)
+    (async () => {
+        try {
+            updateStatus('⏳ Загрузка Fingerprint library...', 'loading');
+            displayDebug('🔧 Начинаем инициализацию...');
+            
+            // 🔧 ИСПРАВЛЕНО: Конфигурация для локального fp.js
+            const PROXY_ENDPOINT = '/metrics/identification';
+            
+            displayDebug(`📡 Используем endpoint: ${PROXY_ENDPOINT}`);
+            
+            // Динамический импорт ЛОКАЛЬНОГО fp.js
+            const FingerprintJS = await import('/fp.js');
+            displayDebug('✅ Локальный FingerprintJS загружен');
+            
+            updateStatus('🔧 Настройка прокси-интеграции...', 'loading');
+            
+            // 🔧 ИСПРАВЛЕНО: Убираем scriptUrlPattern для локального fp.js
+            fp = await FingerprintJS.load({
+                region: 'eu',
+                endpoint: [
+                    PROXY_ENDPOINT,
+                    FingerprintJS.defaultEndpoint  // Fallback
+                ]
+                // НЕ ИСПОЛЬЗУЕМ scriptUrlPattern!
+            });
+            
+            displayDebug('✅ FingerprintJS сконфигурирован с прокси');
+            
+            updateStatus('✅ Fingerprint готов к использованию!', 'success');
+            document.getElementById('getFingerprint').disabled = false;
+            
+            displayDebug('🎯 Инициализация завершена успешно');
+            
+            // Автоматически получаем первый отпечаток
+            await getFingerprint();
+            
+        } catch (error) {
+            console.error('❌ Ошибка инициализации FingerprintJS:', error);
+            updateStatus(`❌ Ошибка инициализации: ${error.message}`, 'error');
+            displayResult('❌ Ошибка инициализации', error.message);
+            displayDebug(`❌ Ошибка инициализации: ${error.message}`);
+        }
+    })();
+</script>
 </body>
 </html>
