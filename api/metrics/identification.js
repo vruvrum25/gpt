@@ -3,13 +3,13 @@ export default async function handler(req, res) {
     console.log('=== Starting Fingerprint Proxy ===');
     console.log('Method:', req.method);
     console.log('URL:', req.url);
-    
+
     // CORS заголовки
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS, GET');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-fpjs-client-version');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    
+
     if (req.method === 'OPTIONS') {
       return res.status(200).end();
     }
@@ -30,22 +30,32 @@ export default async function handler(req, res) {
       return req.headers['x-forwarded-host'] || req.headers.host || '';
     }
 
-    function filterIidtCookie(cookie) {
-      if (!cookie) return '';
-      const match = cookie.match(/_iidt=([^;]+)/);
-      return match ? `_iidt=${match[1]}` : '';
+    // 🔧 ИСПРАВЛЕННАЯ функция для парсинга cookies
+    function parseCookies(cookieHeader) {
+      if (!cookieHeader) return {};
+      
+      const cookies = {};
+      cookieHeader.split(';').forEach(cookie => {
+        const [name, ...rest] = cookie.trim().split('=');
+        if (name && rest.length > 0) {
+          cookies[name] = rest.join('=');
+        }
+      });
+      
+      return cookies;
     }
 
     // Определяем путь для проксирования
     const scriptName = '/metrics/identification';
     const requestUri = req.url;
-    
     let randomPath = '';
+    
     if (requestUri.startsWith(scriptName)) {
       const after = requestUri.substring(scriptName.length);
       const qPos = after.indexOf('?');
       randomPath = qPos === -1 ? after : after.substring(0, qPos);
     }
+
     randomPath = randomPath.replace(/^\/+|\/+$/g, '');
 
     // Формируем URL
@@ -76,8 +86,8 @@ export default async function handler(req, res) {
 
     // 🔧 ИСПРАВЛЕННАЯ ОБРАБОТКА ЗАГОЛОВКОВ
     const headers = {};
-
-    // Разрешенные заголовки
+    
+    // Разрешенные заголовки (согласно документации - все кроме cookie)
     const allowedHeaders = [
       'user-agent',
       'sec-ch-ua',
@@ -87,7 +97,7 @@ export default async function handler(req, res) {
       'accept',
       'origin',
       'sec-fetch-site',
-      'sec-fetch-mode', 
+      'sec-fetch-mode',
       'sec-fetch-dest',
       'referer',
       'accept-encoding',
@@ -95,7 +105,7 @@ export default async function handler(req, res) {
       'priority'
     ];
 
-    // Фильтруем заголовки
+    // Копируем все заголовки кроме cookie
     for (const [key, value] of Object.entries(req.headers)) {
       const lowerKey = key.toLowerCase();
       
@@ -107,36 +117,33 @@ export default async function handler(req, res) {
       if (lowerKey === 'cookie') continue; // Обрабатываем отдельно
       if (lowerKey === 'host') continue;
       if (lowerKey === 'connection') continue;
-      
+
       if (allowedHeaders.includes(lowerKey)) {
         headers[key] = value;
       }
     }
 
-    // 🔧 КРИТИЧНО: Отладка и обработка cookie
+    // 🔧 КРИТИЧНО: Правильная обработка cookies согласно документации
     console.log('=== Cookie Debug ===');
     console.log('Original cookie header:', req.headers.cookie);
     
     const cookieHeader = req.headers.cookie || '';
-    const iidt = filterIidtCookie(cookieHeader);
+    const cookieMap = parseCookies(cookieHeader);
+    const _iidtCookie = cookieMap['_iidt'];
     
-    console.log('Filtered _iidt cookie:', iidt);
+    console.log('Parsed cookies:', cookieMap);
+    console.log('_iidt cookie:', _iidtCookie);
     
-    if (iidt) {
-      headers['cookie'] = iidt;
-      console.log('✅ Cookie added to headers');
+    // Согласно документации: передаем только _iidt если он есть
+    if (_iidtCookie) {
+      headers['cookie'] = `_iidt=${_iidtCookie}`;
+      console.log('✅ _iidt cookie added to headers');
     } else {
-      console.log('❌ No _iidt cookie found');
-      
-      // 🔧 ВРЕМЕННО: Если нет _iidt, пропускаем все cookies
-      // В рабочем PHP есть и _iidt и _vid_t, попробуем передать все
-      if (cookieHeader) {
-        headers['cookie'] = cookieHeader;
-        console.log('⚠️ Using full cookie header as fallback:', cookieHeader);
-      }
+      console.log('❌ No _iidt cookie found - not setting cookie header');
+      // НЕ устанавливаем cookie header вообще
     }
 
-    // Получаем тело запроса и устанавливаем Content-Length
+    // Получаем тело запроса
     let body = null;
     if (method === 'POST') {
       body = await new Promise((resolve, reject) => {
@@ -145,12 +152,11 @@ export default async function handler(req, res) {
         req.on('end', () => resolve(Buffer.concat(chunks)));
         req.on('error', reject);
       });
-      
       headers['Content-Length'] = body.length.toString();
       console.log('Request body length:', body.length);
     }
 
-    // Добавляем прокси-заголовки
+    // 🔧 ОБЯЗАТЕЛЬНЫЕ заголовки Fingerprint (только для POST)
     if (method === 'POST') {
       headers['FPJS-Proxy-Secret'] = PROXY_SECRET;
       headers['FPJS-Proxy-Client-IP'] = getClientIp();
@@ -168,25 +174,22 @@ export default async function handler(req, res) {
 
     // Выполняем запрос
     console.log('Making request to Fingerprint API...');
-    
     const fetchOptions = {
       method: method,
       headers: headers
     };
-    
+
     if (method === 'POST' && body) {
       fetchOptions.body = body;
     }
 
     const response = await fetch(url, fetchOptions);
-    
     console.log('Response status:', response.status);
     console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
     // Обрабатываем ответ
     const responseHeaders = response.headers;
     const responseBody = await response.arrayBuffer();
-    
     console.log('Response body length:', responseBody.byteLength);
 
     // Устанавливаем заголовки ответа
@@ -195,25 +198,21 @@ export default async function handler(req, res) {
       if (lowerKey === 'strict-transport-security') continue;
       if (lowerKey === 'transfer-encoding') continue;
       if (lowerKey.startsWith('content-encoding')) continue;
-      
       res.setHeader(key, value);
     }
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-
     res.status(response.status).send(Buffer.from(responseBody));
 
   } catch (error) {
     console.error('=== ERROR ===');
     console.error('Error:', error.message);
-    
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     
     const requestId = `${Date.now()}.${Math.random().toString(36).substr(2, 6)}`;
-    
     res.status(500).json({
       v: '2',
       error: {
