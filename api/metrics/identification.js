@@ -10,23 +10,26 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-fpjs-client-version');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     
+    // Обрабатываем preflight OPTIONS запрос
     if (req.method === 'OPTIONS') {
       return res.status(200).end();
     }
 
+    // === КОНФИГИ ===
     const PROXY_SECRET = 'xhio4GIKdPYHuOoD4u3w';
     const FINGERPRINT_API = 'https://eu.api.fpjs.io';
 
-    // 🔧 ИСПРАВЛЕННАЯ функция получения IP
+    // === ФУНКЦИИ ===
+    
+    // Получение IP клиента
     function getClientIp() {
       console.log('=== IP Detection ===');
       
-      // Все возможные заголовки с IP клиента
       const ipSources = [
-        req.headers['cf-connecting-ip'],           // Cloudflare
-        req.headers['x-real-ip'],                  // Nginx
-        req.headers['x-forwarded-for'],            // Стандартный прокси
-        req.headers['x-vercel-forwarded-for']      // Vercel специфичный
+        req.headers['cf-connecting-ip'],
+        req.headers['x-real-ip'],
+        req.headers['x-forwarded-for'],
+        req.headers['x-vercel-forwarded-for']
       ];
       
       console.log('IP headers:', {
@@ -36,10 +39,8 @@ export default async function handler(req, res) {
         'x-vercel-forwarded-for': req.headers['x-vercel-forwarded-for']
       });
       
-      // Ищем первый валидный публичный IP
       for (const ipSource of ipSources) {
         if (ipSource) {
-          // Для x-forwarded-for может быть список IP через запятую
           const ips = ipSource.split(',').map(ip => ip.trim());
           
           for (const ip of ips) {
@@ -53,31 +54,25 @@ export default async function handler(req, res) {
         }
       }
       
-      // 🔧 КРИТИЧНО: Если не найден реальный IP, используем публичный для тестирования
       console.log('⚠️ No valid client IP found, using fallback');
-      
-      // Для тестирования используем Google DNS IP
-      // В продакшене это означает, что реальный IP клиента не передается
       return '8.8.8.8';
     }
 
-    // 🔧 ФУНКЦИЯ ВАЛИДАЦИИ ПУБЛИЧНОГО IP
+    // Валидация публичного IP
     function isValidPublicIP(ip) {
       if (!ip || typeof ip !== 'string') return false;
       
-      // Проверка формата IPv4
       const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
       if (!ipv4Regex.test(ip)) return false;
       
       const parts = ip.split('.').map(Number);
       
-      // Исключаем приватные диапазоны
-      if (parts[0] === 10) return false;                              // 10.0.0.0/8
-      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false; // 172.16.0.0/12
-      if (parts[0] === 192 && parts[1] === 168) return false;         // 192.168.0.0/16
-      if (parts[0] === 127) return false;                             // 127.0.0.0/8 (localhost)
-      if (parts[0] === 169 && parts[1] === 254) return false;         // 169.254.0.0/16 (link-local)
-      if (parts[0] === 0) return false;                               // 0.0.0.0/8
+      if (parts[0] === 10) return false;
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false;
+      if (parts[0] === 192 && parts[1] === 168) return false;
+      if (parts[0] === 127) return false;
+      if (parts[0] === 169 && parts[1] === 254) return false;
+      if (parts[0] === 0) return false;
       
       return true;
     }
@@ -92,7 +87,7 @@ export default async function handler(req, res) {
       return match ? `_iidt=${match[1]}` : '';
     }
 
-    // Определяем путь для проксирования
+    // === ОПРЕДЕЛЯЕМ ПУТЬ ДЛЯ ПРОКСИРОВАНИЯ ===
     const scriptName = '/metrics/identification';
     const requestUri = req.url;
     
@@ -104,7 +99,7 @@ export default async function handler(req, res) {
     }
     randomPath = randomPath.replace(/^\/+|\/+$/g, '');
 
-    // Формируем URL
+    // === ФОРМИРУЕМ URL ===
     const method = req.method;
     const originalUrl = new URL(req.url, `http://${req.headers.host}`);
     const query = originalUrl.searchParams.toString();
@@ -130,22 +125,50 @@ export default async function handler(req, res) {
 
     console.log('Target URL:', url);
 
-    // Подготавливаем заголовки
+    // === 🔧 ИСПРАВЛЕННЫЕ ЗАГОЛОВКИ ===
     const headers = {};
 
+    // Строгая фильтрация заголовков - только разрешенные
+    const allowedHeaders = [
+      'accept',
+      'accept-language',
+      'user-agent',
+      'referer',
+      'origin'
+    ];
+
+    // Копируем только разрешенные заголовки
     for (const [key, value] of Object.entries(req.headers)) {
-      if (key.toLowerCase() === 'cookie') continue;
-      if (['host', 'connection', 'content-length'].includes(key.toLowerCase())) continue;
-      headers[key] = value;
+      const lowerKey = key.toLowerCase();
+      
+      // Пропускаем все служебные заголовки
+      if (lowerKey.startsWith('x-vercel-')) continue;
+      if (lowerKey === 'cookie') continue;
+      if (lowerKey === 'forwarded') continue;
+      if (lowerKey === 'priority') continue;
+      if (lowerKey.startsWith('sec-')) continue;
+      if (['host', 'connection', 'content-length', 'accept-encoding'].includes(lowerKey)) continue;
+      
+      // Добавляем только если в списке разрешенных
+      if (allowedHeaders.includes(lowerKey)) {
+        headers[key] = value;
+      }
     }
 
+    // 🔧 КРИТИЧНО: Принудительно устанавливаем правильный Content-Type
+    headers['Content-Type'] = 'application/json';
+
+    // 🔧 КРИТИЧНО: Отключаем сжатие для избежания "иероглифов"
+    headers['Accept-Encoding'] = 'identity';
+
+    // Добавляем только _iidt cookie
     const cookieHeader = req.headers.cookie || '';
     const iidt = filterIidtCookie(cookieHeader);
     if (iidt) {
       headers['cookie'] = iidt;
     }
 
-    // 🔧 КРИТИЧНО: Валидация прокси-заголовков
+    // Добавляем прокси-заголовки для POST
     if (method === 'POST') {
       const clientIP = getClientIp();
       const hostValue = getHost();
@@ -156,7 +179,6 @@ export default async function handler(req, res) {
       console.log('Host:', hostValue);
       console.log('Is IP public:', isValidPublicIP(clientIP));
       
-      // Проверяем обязательные значения
       if (!PROXY_SECRET || PROXY_SECRET.length < 10) {
         throw new Error('Invalid proxy secret');
       }
@@ -170,7 +192,6 @@ export default async function handler(req, res) {
         throw new Error('Missing host header');
       }
       
-      // Устанавливаем прокси-заголовки
       headers['FPJS-Proxy-Secret'] = PROXY_SECRET;
       headers['FPJS-Proxy-Client-IP'] = clientIP;
       headers['FPJS-Proxy-Forwarded-Host'] = hostValue;
@@ -178,13 +199,17 @@ export default async function handler(req, res) {
       console.log('✅ Proxy headers set successfully');
     }
 
-    console.log('Final proxy headers:', {
-      'FPJS-Proxy-Secret': headers['FPJS-Proxy-Secret'] ? '***SET***' : 'NOT SET',
+    console.log('=== Cleaned Request Headers ===');
+    console.log('Content-Type:', headers['Content-Type']);
+    console.log('Accept-Encoding:', headers['Accept-Encoding']);
+    console.log('Total headers count:', Object.keys(headers).length);
+    console.log('Proxy headers:', {
+      'FPJS-Proxy-Secret': headers['FPJS-Proxy-Secret'] ? 'SET' : 'NOT SET',
       'FPJS-Proxy-Client-IP': headers['FPJS-Proxy-Client-IP'],
       'FPJS-Proxy-Forwarded-Host': headers['FPJS-Proxy-Forwarded-Host']
     });
 
-    // Получаем тело запроса
+    // === ПОЛУЧАЕМ ТЕЛО ЗАПРОСА ===
     let body = null;
     if (method === 'POST') {
       body = await new Promise((resolve, reject) => {
@@ -196,7 +221,7 @@ export default async function handler(req, res) {
       console.log('Request body length:', body.length);
     }
 
-    // Выполняем запрос
+    // === ВЫПОЛНЯЕМ ЗАПРОС ===
     console.log('Making request to Fingerprint API...');
     
     const fetchOptions = {
@@ -214,7 +239,7 @@ export default async function handler(req, res) {
     console.log('Status:', response.status);
     console.log('Status Text:', response.statusText);
 
-    // 🔧 СПЕЦИАЛЬНАЯ ОБРАБОТКА 403 ОШИБКИ
+    // Специальная обработка 403 ошибки
     if (response.status === 403) {
       console.error('🚨 403 Forbidden - Proxy authentication failed');
       
@@ -222,6 +247,7 @@ export default async function handler(req, res) {
       try {
         errorBody = await response.text();
         console.error('403 Error details:', errorBody);
+        console.error('403 Error body (hex):', Buffer.from(errorBody).toString('hex'));
       } catch (e) {
         console.error('Could not read 403 error body:', e);
       }
@@ -229,6 +255,7 @@ export default async function handler(req, res) {
       throw new Error(`Fingerprint API rejected proxy authentication (403). Check proxy secret and IP address.`);
     }
 
+    // === ОБРАБАТЫВАЕМ ОТВЕТ ===
     const responseHeaders = response.headers;
     const responseBody = await response.arrayBuffer();
     
