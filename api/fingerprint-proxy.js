@@ -172,7 +172,17 @@ async function handleIdentificationPost(req, res) {
 
   // Обязательные заголовки для POST
   headers['FPJS-Proxy-Secret'] = PROXY_SECRET;
-  headers['FPJS-Proxy-Client-IP'] = getClientIp(req);
+  
+  const clientIp = getClientIp(req);
+  if (!clientIp) {
+    console.error('❌ CRITICAL: No valid client IP found for FPJS-Proxy-Client-IP');
+    return res.status(400).json({
+      error: 'Unable to determine client IP address',
+      message: 'Client IP is required for Fingerprint API authentication'
+    });
+  }
+  
+  headers['FPJS-Proxy-Client-IP'] = clientIp;
   headers['FPJS-Proxy-Forwarded-Host'] = getHost(req);
 
   // 🔧 НОВОЕ: Логируем исходящие заголовки как в PHP
@@ -182,7 +192,7 @@ async function handleIdentificationPost(req, res) {
   console.log('=== Proxy Headers ===');
   console.log(JSON.stringify({
     'FPJS-Proxy-Secret': PROXY_SECRET,
-    'FPJS-Proxy-Client-IP': getClientIp(req),
+    'FPJS-Proxy-Client-IP': clientIp,
     'FPJS-Proxy-Forwarded-Host': getHost(req)
   }, null, 2));
   
@@ -338,12 +348,95 @@ function getHost(req) {
   return req.headers['x-forwarded-host'] || req.headers.host || '';
 }
 
+// 🔧 НОВАЯ ИСПРАВЛЕННАЯ ФУНКЦИЯ: getClientIp
 function getClientIp(req) {
+  // Порядок проверки заголовков по приоритету надежности
+  const ipHeaders = [
+    'x-forwarded-for',
+    'x-real-ip',
+    'x-client-ip',
+    'cf-connecting-ip',      // Cloudflare
+    'true-client-ip',        // Cloudflare/Akamai
+    'x-cluster-client-ip',
+    'x-forwarded',
+    'forwarded-for',
+    'forwarded'
+  ];
+
+  // 1. Проверяем X-Forwarded-For (самый распространенный)
   const xForwardedFor = req.headers['x-forwarded-for'];
   if (xForwardedFor) {
-    return xForwardedFor.split(',')[0].trim();
+    // X-Forwarded-For может содержать список IP через запятую
+    // Первый IP - это оригинальный клиент
+    const ips = xForwardedFor.split(',').map(ip => ip.trim());
+    const clientIp = ips[0];
+    
+    if (isValidIp(clientIp)) {
+      console.log(`✅ Client IP from x-forwarded-for: ${clientIp}`);
+      return clientIp;
+    }
   }
-  return '89.117.67.22';
+
+  // 2. Проверяем другие заголовки
+  for (const header of ipHeaders.slice(1)) {
+    const ip = req.headers[header];
+    if (ip && isValidIp(ip)) {
+      console.log(`✅ Client IP from ${header}: ${ip}`);
+      return ip;
+    }
+  }
+
+  // 3. Vercel специфичные заголовки
+  const vercelForwardedFor = req.headers['x-vercel-forwarded-for'];
+  if (vercelForwardedFor) {
+    const ip = vercelForwardedFor.split(',')[0].trim();
+    if (isValidIp(ip)) {
+      console.log(`✅ Client IP from x-vercel-forwarded-for: ${ip}`);
+      return ip;
+    }
+  }
+
+  // 4. Попытка извлечь из socket (если доступен)
+  if (req.socket && req.socket.remoteAddress) {
+    const socketIp = req.socket.remoteAddress;
+    if (isValidIp(socketIp)) {
+      console.log(`✅ Client IP from socket: ${socketIp}`);
+      return socketIp;
+    }
+  }
+
+  // 5. Если ничего не найдено - возвращаем null и логируем ошибку
+  console.error('❌ Unable to determine client IP address');
+  console.error('Available headers:', Object.keys(req.headers).filter(h => 
+    h.toLowerCase().includes('ip') || h.toLowerCase().includes('forward')
+  ));
+  
+  return null; // Вместо хардкоженного IP
+}
+
+// 🔧 НОВАЯ ФУНКЦИЯ: Вспомогательная функция для проверки валидности IP
+function isValidIp(ip) {
+  if (!ip || typeof ip !== 'string') return false;
+  
+  // Убираем порт если есть (например: 192.168.1.1:8080)
+  const cleanIp = ip.split(':')[0];
+  
+  // IPv4 регулярное выражение
+  const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+  
+  // IPv6 регулярное выражение (упрощенная)
+  const ipv6Regex = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+  
+  // Исключаем локальные и приватные IP
+  if (cleanIp.startsWith('127.') || 
+      cleanIp.startsWith('10.') || 
+      cleanIp.startsWith('192.168.') ||
+      cleanIp.startsWith('172.16.') ||
+      cleanIp === '::1') {
+    return false;
+  }
+  
+  return ipv4Regex.test(cleanIp) || ipv6Regex.test(cleanIp);
 }
 
 async function getRequestBody(req) {
