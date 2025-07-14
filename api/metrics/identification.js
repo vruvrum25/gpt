@@ -113,7 +113,7 @@ export default async function handler(req, res) {
 
     console.log('Request headers:', headers);
     console.log('Proxy headers:', {
-      'FPJS-Proxy-Secret': headers['FPJS-Proxy-Secret'] ? 'SET' : 'NOT SET',
+      'FPJS-Proxy-Secret': headers['FPJS-Proxy-Secret'],
       'FPJS-Proxy-Client-IP': headers['FPJS-Proxy-Client-IP'],
       'FPJS-Proxy-Forwarded-Host': headers['FPJS-Proxy-Forwarded-Host']
     });
