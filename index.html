@@ -71,6 +71,13 @@
             background-color: #6c757d;
             cursor: not-allowed;
         }
+        .debug-info {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -89,9 +96,13 @@
             <button id="clearResults" onclick="clearResults()">
                 🗑️ Очистить результаты
             </button>
+            <button id="showCookies" onclick="showCookies()">
+                🍪 Показать Cookies
+            </button>
         </div>
         
         <div id="results"></div>
+        <div id="debug" class="debug-info" style="display: none;"></div>
     </div>
 
     <script type="module">
@@ -116,10 +127,39 @@
             resultsEl.appendChild(resultItem);
         }
         
+        // Функция для отображения отладочной информации
+        function displayDebug(message) {
+            const debugEl = document.getElementById('debug');
+            debugEl.style.display = 'block';
+            debugEl.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${message}</div>`;
+        }
+        
         // Функция для форматирования времени
         function formatTimestamp(timestamp) {
             return new Date(timestamp).toLocaleString('ru-RU');
         }
+        
+        // Функция для показа cookies
+        window.showCookies = function() {
+            const cookies = document.cookie;
+            displayResult('🍪 Текущие Cookies', cookies || 'Нет cookies');
+            
+            // Проверяем наличие _iidt cookie
+            const iidtMatch = cookies.match(/_iidt=([^;]+)/);
+            if (iidtMatch) {
+                displayResult('✅ _iidt Cookie', iidtMatch[1]);
+                displayDebug('✅ _iidt cookie найден');
+            } else {
+                displayResult('❌ _iidt Cookie', 'Не найден');
+                displayDebug('❌ _iidt cookie отсутствует');
+            }
+            
+            // Проверяем _vid_t cookie
+            const vidtMatch = cookies.match(/_vid_t=([^;]+)/);
+            if (vidtMatch) {
+                displayResult('📝 _vid_t Cookie', vidtMatch[1]);
+            }
+        };
         
         // Основная функция получения отпечатка
         window.getFingerprint = async function() {
@@ -127,8 +167,15 @@
                 updateStatus('🔄 Получение отпечатка...', 'loading');
                 document.getElementById('getFingerprint').disabled = true;
                 
+                displayDebug('🚀 Начинаем получение отпечатка...');
+                
+                // Показываем cookies перед запросом
+                showCookies();
+                
                 // Получаем идентификацию
                 const result = await fp.get({ extendedResult: true });
+                
+                displayDebug('✅ Отпечаток получен успешно');
                 
                 // Отображаем результаты на странице
                 displayResult('🆔 Request ID', result.requestId);
@@ -149,6 +196,9 @@
                     displayResult('💻 Operating System', `${result.os} ${result.osVersion || ''}`);
                 }
                 
+                // Показываем cookies после запроса
+                setTimeout(() => showCookies(), 1000);
+                
                 // Логируем в консоль для разработчиков
                 console.log('🔍 Полный результат Fingerprint:', result);
                 console.log('📋 Request ID:', result.requestId);
@@ -159,6 +209,7 @@
                 console.error('❌ Ошибка получения отпечатка:', error);
                 updateStatus(`❌ Ошибка: ${error.message}`, 'error');
                 displayResult('❌ Ошибка', error.message);
+                displayDebug(`❌ Ошибка: ${error.message}`);
             } finally {
                 document.getElementById('getFingerprint').disabled = false;
             }
@@ -167,6 +218,8 @@
         // Функция очистки результатов
         window.clearResults = function() {
             document.getElementById('results').innerHTML = '';
+            document.getElementById('debug').innerHTML = '';
+            document.getElementById('debug').style.display = 'none';
             updateStatus('📝 Результаты очищены', 'loading');
         };
         
@@ -174,23 +227,43 @@
         (async () => {
             try {
                 updateStatus('⏳ Загрузка Fingerprint library...', 'loading');
+                displayDebug('🔧 Начинаем инициализацию...');
                 
-                // Укажите свой путь для проксированного API
-               const CONFIG_API = '/metrics/identification';
+                // 🔧 ОБНОВЛЕННАЯ КОНФИГУРАЦИЯ для объединенного прокси
+                const PROXY_ENDPOINT = '/metrics/identification';
+                const PROXY_AGENT = '/metrics/agent';
+                
+                displayDebug(`📡 Используем endpoints: ${PROXY_ENDPOINT}, ${PROXY_AGENT}`);
                 
                 // Динамический импорт FingerprintJS
                 const FingerprintJS = await import('/fp.js');
+                displayDebug('✅ FingerprintJS загружен');
                 
                 updateStatus('🔧 Настройка прокси-интеграции...', 'loading');
                 
-                // Загружаем FingerprintJS с вашим прокси-сервером
+                // 🔧 КРИТИЧНО: Загружаем FingerprintJS с полной прокси-конфигурацией
                 fp = await FingerprintJS.load({
                     region: 'eu',  // Ваш регион
-                    endpoint: [CONFIG_API, FingerprintJS.defaultEndpoint]  // Прокси + fallback
+                    
+                    // 🔧 НОВОЕ: Добавляем scriptUrlPattern для agent download
+                    scriptUrlPattern: [
+                        `${PROXY_AGENT}?apiKey=<apiKey>&version=<version>&loaderVersion=<loaderVersion>`,
+                        FingerprintJS.defaultScriptUrlPattern  // Fallback
+                    ],
+                    
+                    // 🔧 Endpoint для identification requests
+                    endpoint: [
+                        PROXY_ENDPOINT,
+                        FingerprintJS.defaultEndpoint  // Fallback
+                    ]
                 });
+                
+                displayDebug('✅ FingerprintJS сконфигурирован с прокси');
                 
                 updateStatus('✅ Fingerprint готов к использованию!', 'success');
                 document.getElementById('getFingerprint').disabled = false;
+                
+                displayDebug('🎯 Инициализация завершена успешно');
                 
                 // Автоматически получаем первый отпечаток
                 await getFingerprint();
@@ -199,6 +272,7 @@
                 console.error('❌ Ошибка инициализации FingerprintJS:', error);
                 updateStatus(`❌ Ошибка инициализации: ${error.message}`, 'error');
                 displayResult('❌ Ошибка инициализации', error.message);
+                displayDebug(`❌ Ошибка инициализации: ${error.message}`);
             }
         })();
     </script>
