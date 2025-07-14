@@ -59,11 +59,9 @@ export default async function handler(req, res) {
   }
 }
 
-// === ФУНКЦИЯ: BROWSER CACHE ===
+// === ФУНКЦИЯ: BROWSER CACHE (ИСПРАВЛЕННАЯ) ===
 async function handleBrowserCache(req, res) {
   console.log('>>> Handling Browser Cache Request');
-  console.log('=== Browser Cache Debug ===');
-  console.log('Original request headers:', JSON.stringify(req.headers, null, 2));
   
   let randomPath = extractRandomPathLikePHP(req.url);
   console.log('Random path:', randomPath);
@@ -82,11 +80,10 @@ async function handleBrowserCache(req, res) {
 
   console.log('Browser cache URL:', targetUrl);
 
-  const headers = copyAllHeaders(req.headers, { removeCookies: true });
+  // 🔧 ИСПРАВЛЕНИЕ: НЕ удаляем cookies для browser cache
+  const headers = copyAllHeaders(req.headers, { removeCookies: false });
   
-  // 🔧 КРИТИЧНО: НЕ добавляем _iidt для browser cache запросов
-  // Browser cache запросы должны работать без cookies и УСТАНАВЛИВАТЬ их
-  console.log('=== Browser Cache Request Headers ===');
+  console.log('=== Browser Cache Request Headers (with cookies) ===');
   console.log(JSON.stringify(headers, null, 2));
 
   const response = await fetch(targetUrl, {
@@ -97,7 +94,7 @@ async function handleBrowserCache(req, res) {
   const responseBody = await response.arrayBuffer();
   console.log('Browser cache response:', response.status);
 
-  // 🔧 КРИТИЧНО: Детальное логирование Set-Cookie
+  // Детальное логирование Set-Cookie
   console.log('=== Browser Cache Response Headers ===');
   const responseHeadersObj = {};
   let hasSetCookie = false;
@@ -115,11 +112,6 @@ async function handleBrowserCache(req, res) {
 
   copyAllResponseHeaders(res, response.headers, req);
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-
-  // 🔧 НОВОЕ: Проверяем что Set-Cookie действительно установлен
-  const finalHeaders = res.getHeaders();
-  console.log('=== Final Response Headers Being Sent ===');
-  console.log(JSON.stringify(finalHeaders, null, 2));
 
   return res.status(response.status).send(Buffer.from(responseBody));
 }
