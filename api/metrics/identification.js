@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     if (randomPath) {
       url = `${FINGERPRINT_API}/${randomPath}`;
     } else {
-      url = FINGERPRINT_API;
+      url = `${FINGERPRINT_API}/`;
     }
 
     // PHP: if ($method === 'POST')
