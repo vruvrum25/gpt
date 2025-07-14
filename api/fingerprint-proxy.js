@@ -1,8 +1,8 @@
 // 🔧 Выносим константы в глобальную область
 const PROXY_SECRET = 'xhio4GIKdPYHuOoD4u3w';
 const FINGERPRINT_API = 'https://eu.api.fpjs.io';
-const FINGERPRINT_CDN = 'https://fpcdn.io';
 
+// Убираем agent download обработку полностью
 export default async function handler(req, res) {
   try {
     console.log('=== Fingerprint Unified Proxy ===');
@@ -19,19 +19,16 @@ export default async function handler(req, res) {
       return res.status(200).end();
     }
 
-    // Определяем тип запроса
+    // 🔧 ИСПРАВЛЕНО: Упрощаем определение типа запроса
     const url = req.url;
-    const isAgentDownload = url.includes('agent') || url.includes('apiKey');
     const isIdentification = url.includes('identification');
     const isBrowserCache = isIdentification && req.method === 'GET';
     const isIdentificationPost = isIdentification && req.method === 'POST';
 
-    console.log('Request type:', { isAgentDownload, isIdentification, isBrowserCache, isIdentificationPost });
+    console.log('Request type:', { isIdentification, isBrowserCache, isIdentificationPost });
 
-    if (isAgentDownload && req.method === 'GET') {
-      return await handleAgentDownload(req, res);
-    }
-
+    // 🔧 УБИРАЕМ agent download - используем только identification
+    
     if (isBrowserCache) {
       return await handleBrowserCache(req, res);
     }
@@ -43,9 +40,7 @@ export default async function handler(req, res) {
     return res.status(404).json({ error: 'Unknown request type' });
 
   } catch (error) {
-    console.error('=== UNIFIED PROXY ERROR ===');
-    console.error('Error:', error.message);
-    console.error('Stack:', error.stack);
+    console.error('=== ERROR ===', error);
     
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -64,43 +59,7 @@ export default async function handler(req, res) {
   }
 }
 
-// === ФУНКЦИЯ 1: AGENT DOWNLOAD ===
-async function handleAgentDownload(req, res) {
-  console.log('>>> Handling Agent Download');
-  
-  const { apiKey, version = 3, loaderVersion } = req.query;
-  if (!apiKey) {
-    return res.status(400).send('API key is required');
-  }
-
-  const loaderParam = loaderVersion ? `/loader_v${loaderVersion}.js` : '';
-  const agentDownloadUrl = new URL(`${FINGERPRINT_CDN}/v${version}/${apiKey}${loaderParam}`);
-  
-  const originalUrl = new URL(req.url, `http://${req.headers.host}`);
-  originalUrl.searchParams.forEach((value, key) => {
-    agentDownloadUrl.searchParams.append(key, value);
-  });
-  agentDownloadUrl.searchParams.append('ii', 'custom-proxy-integration/1.0.1/procdn');
-
-  console.log('Agent download URL:', agentDownloadUrl.toString());
-
-  const headers = copyAllHeaders(req.headers, { removeCookies: true });
-
-  const response = await fetch(agentDownloadUrl.toString(), {
-    method: 'GET',
-    headers: headers
-  });
-
-  const responseBody = await response.arrayBuffer();
-  console.log('Agent download response:', response.status);
-
-  copyAllResponseHeaders(res, response.headers);
-  res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=60');
-
-  return res.status(response.status).send(Buffer.from(responseBody));
-}
-
-// === ФУНКЦИЯ 2: BROWSER CACHE ===
+// === ФУНКЦИЯ: BROWSER CACHE ===
 async function handleBrowserCache(req, res) {
   console.log('>>> Handling Browser Cache Request');
   console.log('=== Browser Cache Debug ===');
@@ -154,7 +113,7 @@ async function handleBrowserCache(req, res) {
   console.log(JSON.stringify(responseHeadersObj, null, 2));
   console.log('Has Set-Cookie header:', hasSetCookie);
 
-  copyAllResponseHeaders(res, response.headers);
+  copyAllResponseHeaders(res, response.headers, req);
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
   // 🔧 НОВОЕ: Проверяем что Set-Cookie действительно установлен
@@ -165,7 +124,7 @@ async function handleBrowserCache(req, res) {
   return res.status(response.status).send(Buffer.from(responseBody));
 }
 
-// === ФУНКЦИЯ 3: IDENTIFICATION POST ===
+// === ФУНКЦИЯ: IDENTIFICATION POST ===
 async function handleIdentificationPost(req, res) {
   console.log('>>> Identification POST');
   
@@ -256,7 +215,7 @@ async function handleIdentificationPost(req, res) {
   console.log(JSON.stringify(responseHeadersObj, null, 2));
   console.log('Response body length:', responseBody.byteLength);
 
-  copyAllResponseHeaders(res, response.headers);
+  copyAllResponseHeaders(res, response.headers, req);
   return res.status(response.status).send(Buffer.from(responseBody));
 }
 
@@ -288,50 +247,72 @@ function copyAllHeaders(originalHeaders, options = {}) {
   return headers;
 }
 
-// 🔧 ФУНКЦИЯ: Копирует ВСЕ заголовки ответа как в PHP
-function copyAllResponseHeaders(res, responseHeaders) {
-  console.log('=== Copying ALL Response Headers (PHP style) ===');
+// 🔧 ИСПРАВЛЕНО: Специальная обработка Set-Cookie для Vercel
+function copyAllResponseHeaders(res, responseHeaders, req) {
+  console.log('=== Copying Response Headers (Vercel optimized) ===');
   
-  // 🔧 НОВОЕ: Принудительная установка Set-Cookie
-  let setCookieFound = false;
+  // 🔧 КРИТИЧНО: Принудительная установка Set-Cookie для Vercel
+  const setCookieHeaders = [];
   
+  // Сначала собираем все Set-Cookie заголовки
   for (const [key, value] of responseHeaders.entries()) {
-    const lowerKey = key.toLowerCase();
-    
-    if (lowerKey === 'strict-transport-security') {
-      console.log(`❌ Skipping: ${key}`);
-      continue;
-    }
-    if (lowerKey === 'transfer-encoding') {
-      console.log(`❌ Skipping: ${key}`);
-      continue;
-    }
-    
-    console.log(`✅ Setting: ${key} = ${value}`);
-    
-    // 🔧 СПЕЦИАЛЬНАЯ обработка Set-Cookie
-    if (lowerKey === 'set-cookie') {
-      setCookieFound = true;
-      console.log('🍪 CRITICAL: Setting Set-Cookie header');
-      
-      // Множественные способы установки
-      try {
-        res.setHeader(key, value);
-        
-        // Дополнительная проверка
-        const testHeader = res.getHeader('Set-Cookie');
-        console.log('🍪 Verification - Set-Cookie actually set:', testHeader);
-        
-      } catch (error) {
-        console.error('🍪 ERROR setting Set-Cookie:', error);
-      }
-    } else {
-      res.setHeader(key, value);
+    if (key.toLowerCase() === 'set-cookie') {
+      setCookieHeaders.push(value);
+      console.log('🍪 Found Set-Cookie:', value);
     }
   }
   
-  if (!setCookieFound) {
-    console.log('❌ No Set-Cookie header found in response');
+  // Устанавливаем обычные заголовки
+  for (const [key, value] of responseHeaders.entries()) {
+    const lowerKey = key.toLowerCase();
+    
+    if (lowerKey === 'strict-transport-security') continue;
+    if (lowerKey === 'transfer-encoding') continue;
+    if (lowerKey === 'set-cookie') continue; // Обрабатываем отдельно
+    
+    console.log(`✅ Setting: ${key} = ${value}`);
+    res.setHeader(key, value);
+  }
+  
+  // 🔧 VERCEL FIX: Принудительная установка Set-Cookie
+  if (setCookieHeaders.length > 0) {
+    console.log('🍪 VERCEL: Force setting Set-Cookie headers');
+    
+    // Метод 1: Прямая установка
+    setCookieHeaders.forEach((cookieValue, index) => {
+      console.log(`🍪 Setting cookie ${index + 1}: ${cookieValue}`);
+      
+      // Парсим cookie для установки правильного домена
+      const modifiedCookie = cookieValue.replace(
+        /Domain=[^;]+;?/gi, 
+        `Domain=${getHost(req)};`
+      );
+      
+      if (index === 0) {
+        res.setHeader('Set-Cookie', modifiedCookie);
+      } else {
+        const existing = res.getHeader('Set-Cookie');
+        const newCookies = Array.isArray(existing) 
+          ? [...existing, modifiedCookie]
+          : [existing, modifiedCookie];
+        res.setHeader('Set-Cookie', newCookies);
+      }
+    });
+    
+    // Метод 2: Резервная установка через writeHead
+    res.writeHead = (function(original) {
+      return function(statusCode, headers) {
+        if (headers) {
+          setCookieHeaders.forEach((cookieValue, index) => {
+            const cookieKey = index === 0 ? 'Set-Cookie' : `Set-Cookie-${index}`;
+            headers[cookieKey] = cookieValue;
+          });
+        }
+        return original.call(this, statusCode, headers);
+      };
+    })(res.writeHead);
+    
+    console.log('🍪 Final verification:', res.getHeader('Set-Cookie'));
   }
   
   // Всегда устанавливаем CORS
@@ -360,16 +341,17 @@ function filterIidtCookie(cookie) {
   return match ? `_iidt=${match[1]}` : '';
 }
 
+// 🔧 ИСПРАВЛЕНО: Добавляем getHost функцию
+function getHost(req) {
+  return req.headers['x-forwarded-host'] || req.headers.host || '';
+}
+
 function getClientIp(req) {
   const xForwardedFor = req.headers['x-forwarded-for'];
   if (xForwardedFor) {
     return xForwardedFor.split(',')[0].trim();
   }
   return '89.117.67.22';
-}
-
-function getHost(req) {
-  return req.headers['x-forwarded-host'] || req.headers.host || '';
 }
 
 async function getRequestBody(req) {
