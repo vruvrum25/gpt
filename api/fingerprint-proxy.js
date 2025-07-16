@@ -192,7 +192,7 @@ async function handleRequestId(req, res, requestId) {
     <script>
         function openTelegram() {
             // Замените 'yourchannel' на ваш реальный канал/бот
-            const telegramLink = 'tg://resolve?domain=yourchannel&start';
+            const telegramLink = 'tg://resolve?domain=SpiritGuide1WIN_bot&start';
             
             // Открываем диплинк
             window.location.href = telegramLink;
