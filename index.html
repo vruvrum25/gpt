@@ -6,27 +6,33 @@
     <title>CosmoPath - Ваш астро бот помощник</title>
     
     <!-- Ваш скрипт -->
-  <script type="module">
+ <script type="module">
 (async () => {
     try {
         // Быстрая проверка UDP блокировки
         const isUDPBlocked = await new Promise((resolve) => {
             const timeout = setTimeout(() => resolve(true), 2000); // 2 сек таймаут
+            let resolved = false; // Флаг для предотвращения двойного resolve
             
             try {
                 const pc = new RTCPeerConnection({
-                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                    iceServers: [
+                        { urls: 'stun:stun.sipnet.ru:3478' },      // Российский первым
+                        { urls: 'stun:stun.l.google.com:19302' }   // Google вторым
+                    ]
                 });
                 
                 pc.onicecandidate = (e) => {
-                    if (e.candidate && e.candidate.candidate.includes('udp')) {
+                    if (!resolved && e.candidate && e.candidate.candidate.includes('udp')) {
+                        resolved = true;
                         clearTimeout(timeout);
-                        resolve(false); // UDP работает
+                        resolve(false); // UDP работает - первый же ответ
                     }
                 };
                 
                 pc.onicegatheringstatechange = () => {
-                    if (pc.iceGatheringState === 'complete') {
+                    if (!resolved && pc.iceGatheringState === 'complete') {
+                        resolved = true;
                         clearTimeout(timeout);
                         resolve(true); // UDP заблокирован
                     }
@@ -34,12 +40,18 @@
                 
                 pc.createDataChannel('');
                 pc.createOffer().then(o => pc.setLocalDescription(o)).catch(() => {
-                    clearTimeout(timeout);
-                    resolve(true);
+                    if (!resolved) {
+                        resolved = true;
+                        clearTimeout(timeout);
+                        resolve(true);
+                    }
                 });
             } catch {
-                clearTimeout(timeout);
-                resolve(true);
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    resolve(true);
+                }
             }
         });
         
@@ -74,6 +86,7 @@
     }
 })();
 </script>
+
     
     <style>
         * {
