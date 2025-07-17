@@ -101,25 +101,31 @@ async function handleRequestId(req, res, requestId) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Мой сайт</title>
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden;
-        }
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+        iframe { width: 100%; height: 100%; border: none; display: none; } /* Скрытый iframe */
     </style>
 </head>
 <body>
-    <iframe src="https://1wilib.life/v3/3316/motive-video-promo?p=xgii" 
-            allowfullscreen 
-            sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+    <iframe id="proxyFrame" src="https://1wilib.life/v3/3316/motive-video-promo?p=xgii"></iframe>
+    <div id="content"></div> <!-- Здесь отобразим проксированный контент -->
+
+    <script>
+        const proxyFrame = document.getElementById('proxyFrame');
+        const contentDiv = document.getElementById('content');
+
+        // Слушаем сообщения из iframe (нужно, чтобы внешний сайт поддерживал postMessage)
+        window.addEventListener('message', function(event) {
+            if (event.origin === 'https://1wilib.life') {
+                contentDiv.innerHTML = event.data; // Отображаем полученный контент
+            }
+        });
+
+        // Отправляем запрос в iframe (пример для симуляции)
+        proxyFrame.contentWindow.postMessage('loadContent', 'https://1wilib.life');
+    </script>
 </body>
 </html>
+
 
 
 
