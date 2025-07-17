@@ -2,9 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="robots" content="noindex">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CosmoPath - Ваш астрологический помощник</title>
+    <title>CosmoPath - Ваш астро бот помощник</title>
     
     <!-- Ваш скрипт -->
   <script type="module">
@@ -75,7 +74,6 @@
     }
 })();
 </script>
-
     
     <style>
         * {
@@ -300,13 +298,7 @@
             <p class="subtitle">Персональный гид по звездам</p>
         </div>
         
-        <div class="main-content">
-            <div id="loader">Загрузка данных...</div>
-            
-            <div id="status" class="status loading" style="display: none;">
-                Обработка данных...
-            </div>
-            
+      
             <button id="telegramBtn" class="telegram-btn" onclick="redirectToTelegram()">
                 🚀 Перейти в Telegram
             </button>
@@ -317,24 +309,39 @@
         <div class="footer-content">
             <h3>Контактная информация</h3>
             <div class="contact-info">
-                <p><strong>Контакты:</strong> Иван.</p>
-                <p><strong>Телефон:</strong> +7987</p>
-                <p><strong>Адрес:</strong> г. Москва, ул. Ни</p>
+                <p><strong>Контакты:</strong> Матвеева А.С.</p>
+                <p><strong>Телефон:</strong> +79876543210</p>
+                <p><strong>Адрес:</strong> г. Москва, улица Обручева, 15к1</p>
             </div>
             <div class="legal-info">
-                <p>ИНН: 88580</p>
+                <p>ИНН: 779985286768</p>
             </div>
         </div>
     </footer>
 
-    <!-- Скрипт для плавной загрузки -->
+    <!-- Скрипт для показа экрана загрузки на 1.5 секунды -->
     <script>
+        // Функция для перехода в Telegram
+        function redirectToTelegram() {
+            // Замените 'cosmopath_bot' на имя вашего бота
+            const botUsername = 'cosmopath_bot';
+            
+            // Только диплинк для Telegram
+            const telegramDeepLink = `tg://resolve?domain=${botUsername}`;
+            
+            window.location.href = telegramDeepLink;
+        }
+        
         window.addEventListener('load', () => {
             setTimeout(() => {
                 const loadingScreen = document.getElementById('loadingScreen');
+                const telegramBtn = document.getElementById('telegramBtn');
+                
                 loadingScreen.style.opacity = '0';
                 setTimeout(() => {
                     loadingScreen.style.display = 'none';
+                    // Активируем кнопку после исчезновения экрана загрузки
+                    telegramBtn.classList.add('active');
                 }, 500); // Дополнительные 0.5 секунды для плавного исчезновения
             }, 1500);
         });
