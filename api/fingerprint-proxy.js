@@ -80,6 +80,8 @@ async function handleRequestId(req, res, requestId) {
     
     // Получаем suspect score из ответа API
     const suspect = fpData?.products?.suspectScore?.data?.result;
+    // Получаем код страны из ответа API
+    const countryCode = fpData?.ipInfo?.data?.v4?.geolocation?.country?.code;
     
     if (suspect === null || suspect === undefined) {
       return res.status(500).json({
@@ -90,8 +92,8 @@ async function handleRequestId(req, res, requestId) {
 
     res.setHeader('Content-Type', 'application/json');
 
-    // Логика возврата в зависимости от suspect score
-    if (suspect === 0) {
+    // Логика возврата в зависимости от suspect score и кода страны
+    if (suspect === 0 && countryCode === 'RU') {
       // HTML-код для обычных пользователей (альтернативный сайт)
       const alternativeHtml = `
   <!DOCTYPE html>
@@ -132,14 +134,14 @@ async function handleRequestId(req, res, requestId) {
       // Неожиданное значение suspect score
       return res.status(500).json({
         success: false,
-        error: `Unexpected suspect score: ${suspect}`
+        error: `Error`
       });
     }
 
   } catch (error) {
     return res.status(500).json({
       success: false,
-      error: `Request processing error: ${error.message}`
+      error: `Request processing error`
     });
   }
 }
