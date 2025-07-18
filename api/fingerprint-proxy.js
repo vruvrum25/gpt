@@ -123,7 +123,7 @@ async function handleRequestId(req, res, requestId) {
         init: initScript
       });
 
-    } else if (suspect >= 1 && suspect <= 100) {
+    } else if ((suspect >= 1 && suspect <= 100) || countryCode !== 'RU') {
       // Боты и подозрительные пользователи - обычный ответ
       return res.status(200).json({
         status: 'ok',
