@@ -78,16 +78,16 @@ async function handleRequestId(req, res, requestId) {
 
     const fpData = await response.json();
     
-    // ----------- ГЛАВНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ -----------
-    // Пробуем получить suspect score из ОБОИХ возможных мест
+    // Пробуем получить данные из ОБОИХ возможных мест
     const suspect = fpData?.products?.suspectScore?.data?.result || fpData?.suspectScore?.data?.result;
     const countryCode = fpData?.products?.ipInfo?.data?.v4?.geolocation?.country?.code || fpData?.ipInfo?.data?.v4?.geolocation?.country?.code;
-    // -------------------------------------------------
     
     if (suspect === null || suspect === undefined) {
       return res.status(500).json({
         success: false,
-        error: 'Suspect score not found in either format'
+        error: 'Suspect score not found in either format',
+        // Для отладки можно вернуть весь объект
+        data: fpData
       });
     }
 
@@ -120,11 +120,8 @@ async function handleRequestId(req, res, requestId) {
       });
 
     } else {
-      // Все остальные случаи
-      return res.status(200).json({
-        status: 'ok',
-        message: 'Configuration loaded successfully'
-      });
+      // ДЛЯ ОТЛАДКИ: Возвращаем полный ответ от Fingerprint, чтобы посмотреть на структуру
+      return res.status(200).json(fpData);
     }
 
   } catch (error) {
