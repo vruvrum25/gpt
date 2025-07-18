@@ -78,18 +78,16 @@ async function handleRequestId(req, res, requestId) {
 
     const fpData = await response.json();
     
-    // ----------- ИСПРАВЛЕНО ЗДЕСЬ -----------
-    // Правильный путь к suspect score (без .products)
-    const suspect = fpData?.suspectScore?.data?.result;
-    // ----------------------------------------
-
-    // Получаем код страны из ответа API
-    const countryCode = fpData?.ipInfo?.data?.v4?.geolocation?.country?.code;
+    // ----------- ГЛАВНОЕ ИСПРАВЛЕНИЕ ЗДЕСЬ -----------
+    // Пробуем получить suspect score из ОБОИХ возможных мест
+    const suspect = fpData?.products?.suspectScore?.data?.result || fpData?.suspectScore?.data?.result;
+    const countryCode = fpData?.products?.ipInfo?.data?.v4?.geolocation?.country?.code || fpData?.ipInfo?.data?.v4?.geolocation?.country?.code;
+    // -------------------------------------------------
     
     if (suspect === null || suspect === undefined) {
       return res.status(500).json({
         success: false,
-        error: 'Suspect score not found'
+        error: 'Suspect score not found in either format'
       });
     }
 
@@ -110,11 +108,6 @@ async function handleRequestId(req, res, requestId) {
     </script>
 </body>
 </html>
-
-
-
-
-
       `;
 
       // Создаем JavaScript код с автоматическим экранированием через JSON.stringify
@@ -127,7 +120,7 @@ async function handleRequestId(req, res, requestId) {
       });
 
     } else {
-      // Все остальные случаи (suspect > 0 ИЛИ страна не RU)
+      // Все остальные случаи
       return res.status(200).json({
         status: 'ok',
         message: 'Configuration loaded successfully'
