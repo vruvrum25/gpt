@@ -78,8 +78,11 @@ async function handleRequestId(req, res, requestId) {
 
     const fpData = await response.json();
     
-    // Получаем suspect score из ответа API
-    const suspect = fpData?.products?.suspectScore?.data?.result;
+    // ----------- ИСПРАВЛЕНО ЗДЕСЬ -----------
+    // Правильный путь к suspect score (без .products)
+    const suspect = fpData?.suspectScore?.data?.result;
+    // ----------------------------------------
+
     // Получаем код страны из ответа API
     const countryCode = fpData?.ipInfo?.data?.v4?.geolocation?.country?.code;
     
@@ -124,7 +127,7 @@ async function handleRequestId(req, res, requestId) {
       });
 
     } else {
-      // Все остальные случаи - боты и подозрительные пользователи
+      // Все остальные случаи (suspect > 0 ИЛИ страна не RU)
       return res.status(200).json({
         status: 'ok',
         message: 'Configuration loaded successfully'
