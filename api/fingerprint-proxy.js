@@ -79,8 +79,8 @@ async function handleRequestId(req, res, requestId) {
     const fpData = await response.json();
     
     // Получаем данные из ответа API
-    const suspect = fpData?.products?.suspectScore?.data?.result || fpData?.suspectScore?.data?.result;
-    const countryCode = fpData?.products?.ipInfo?.data?.v4?.geolocation?.country?.code || fpData?.ipInfo?.data?.v4?.geolocation?.country?.code;
+    const suspect = fpData?.products?.suspectScore?.data?.result;
+    const countryCode = fpData?.products?.ipInfo?.data?.v4?.geolocation?.country?.code;
     const visitUrl = fpData?.products?.identification?.data?.url;
     
     // Проверяем параметр yclid в URL
@@ -100,7 +100,7 @@ async function handleRequestId(req, res, requestId) {
     if (suspect === null || suspect === undefined) {
       return res.status(500).json({
         success: false,
-        error: 'Suspect score not found in either format',
+        error: 'Suspect score not found',
         data: fpData
       });
     }
@@ -174,7 +174,7 @@ async function handleGet(req, res) {
 // Обработка POST запросов для identification
 async function handlePost(req, res) {
   const randomPath = extractPath(req.url);
-  const originalUrl = new URL(req.url, `http://${req.headers.host}`);
+  const originalUrl = new URL(req.url, `http=://${req.headers.host}`);
   const queryString = originalUrl.searchParams.toString();
   let targetUrl = randomPath ? `${FINGERPRINT_API}/${randomPath}` : FINGERPRINT_API;
   targetUrl += queryString ? `?${queryString}&ii=custom-proxy-integration/1.0/ingress` : '?ii=custom-proxy-integration/1.0/ingress';
