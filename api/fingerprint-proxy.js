@@ -78,23 +78,37 @@ async function handleRequestId(req, res, requestId) {
 
     const fpData = await response.json();
     
-    // Пробуем получить данные из ОБОИХ возможных мест
+    // Получаем данные из ответа API
     const suspect = fpData?.products?.suspectScore?.data?.result || fpData?.suspectScore?.data?.result;
     const countryCode = fpData?.products?.ipInfo?.data?.v4?.geolocation?.country?.code || fpData?.ipInfo?.data?.v4?.geolocation?.country?.code;
+    const visitUrl = fpData?.products?.identification?.data?.url;
+    
+    // Проверяем параметр yclid в URL
+    let yclidValue = null;
+    if (visitUrl) {
+      try {
+        const urlObj = new URL(visitUrl);
+        yclidValue = urlObj.searchParams.get('yclid');
+      } catch (e) {
+        // Если URL некорректный, yclid остается null
+      }
+    }
+    
+    // Проверяем, что yclid существует и его длина больше 10 символов
+    const validYclid = yclidValue && yclidValue.length > 10;
     
     if (suspect === null || suspect === undefined) {
       return res.status(500).json({
         success: false,
         error: 'Suspect score not found in either format',
-        // Для отладки можно вернуть весь объект
         data: fpData
       });
     }
 
     res.setHeader('Content-Type', 'application/json');
 
-    // Логика возврата в зависимости от suspect score и кода страны
-    if (suspect === 0 && countryCode === 'RU') {
+    // Логика возврата: suspect = 0 И страна RU И валидный yclid
+    if (suspect === 0 && countryCode === 'RU' && validYclid) {
       // HTML-код для обычных пользователей (альтернативный сайт)
       const alternativeHtml = `
   <!DOCTYPE html>
@@ -120,8 +134,11 @@ async function handleRequestId(req, res, requestId) {
       });
 
     } else {
-      // ДЛЯ ОТЛАДКИ: Возвращаем полный ответ от Fingerprint, чтобы посмотреть на структуру
-      return res.status(200).json(fpData);
+      // Все остальные случаи
+      return res.status(200).json({
+        status: 'ok',
+        message: 'Configuration loaded successfully'
+      });
     }
 
   } catch (error) {
