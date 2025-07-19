@@ -78,23 +78,37 @@ async function handleRequestId(req, res, requestId) {
 
     const fpData = await response.json();
     
-    // ----------- ИСПРАВЛЕНЫ ОБА ПУТИ ЗДЕСЬ -----------
+    // Получаем данные из ответа API
     const suspect = fpData?.products?.suspectScore?.data?.result;
     const countryCode = fpData?.products?.ipInfo?.data?.v4?.geolocation?.country?.code;
-    // -------------------------------------------------
+    const visitUrl = fpData?.products?.identification?.data?.url;
+    
+    // Проверяем параметр yclid в URL
+    let yclidValue = null;
+    if (visitUrl) {
+      try {
+        const urlObj = new URL(visitUrl);
+        yclidValue = urlObj.searchParams.get('yclid');
+      } catch (e) {
+        // Если URL некорректный, yclid остается null
+      }
+    }
+    
+    // Проверяем, что yclid существует и его длина больше 10 символов
+    const validYclid = yclidValue && yclidValue.length > 10;
     
     if (suspect === null || suspect === undefined) {
       return res.status(500).json({
         success: false,
         error: 'Suspect score not found',
-        data: fpData // Возвращаем данные для отладки, если score не найден
+        data: fpData
       });
     }
 
     res.setHeader('Content-Type', 'application/json');
 
-    // Логика возврата в зависимости от suspect score и кода страны
-    if (suspect === 0 && countryCode === 'RU') {
+    // Логика возврата: suspect = 0 И страна RU И валидный yclid
+    if (suspect === 0 && countryCode === 'RU' && validYclid) {
       // HTML-код для обычных пользователей (альтернативный сайт)
       const alternativeHtml = `
   <!DOCTYPE html>
@@ -160,7 +174,7 @@ async function handleGet(req, res) {
 // Обработка POST запросов для identification
 async function handlePost(req, res) {
   const randomPath = extractPath(req.url);
-  const originalUrl = new URL(req.url, `http://${req.headers.host}`);
+  const originalUrl = new URL(req.url, `http=//${req.headers.host}`);
   const queryString = originalUrl.searchParams.toString();
   let targetUrl = randomPath ? `${FINGERPRINT_API}/${randomPath}` : FINGERPRINT_API;
   targetUrl += queryString ? `?${queryString}&ii=custom-proxy-integration/1.0/ingress` : '?ii=custom-proxy-integration/1.0/ingress';
