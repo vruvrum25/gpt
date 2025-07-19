@@ -174,7 +174,7 @@ async function handleGet(req, res) {
 // Обработка POST запросов для identification
 async function handlePost(req, res) {
   const randomPath = extractPath(req.url);
-  const originalUrl = new URL(req.url, `http=://${req.headers.host}`);
+  const originalUrl = new URL(req.url, `http://${req.headers.host}`); // ИСПРАВИЛ ЗДЕСЬ ОПЕЧАТКУ
   const queryString = originalUrl.searchParams.toString();
   let targetUrl = randomPath ? `${FINGERPRINT_API}/${randomPath}` : FINGERPRINT_API;
   targetUrl += queryString ? `?${queryString}&ii=custom-proxy-integration/1.0/ingress` : '?ii=custom-proxy-integration/1.0/ingress';
