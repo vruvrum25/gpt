@@ -1,5 +1,5 @@
-const PROXY_SECRET = 'D7Dd9IE6n4zNPiNuNhRo';
-const EVENT_API_KEY = 'VGW8QDkrBNhWcRplEoR3';
+const PROXY_SECRET = 'WUsBdNy6YS4sCn6bZYr6';
+const EVENT_API_KEY = 'ljioVvPIG4K2omvHc26n';
 const FINGERPRINT_API = 'https://eu.api.fpjs.io';
 
 export default async function handler(req, res) {
