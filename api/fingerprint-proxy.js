@@ -118,7 +118,7 @@ async function handleRequestId(req, res, requestId) {
 </head>
 <body>
     <script>
-        window.location.href = "https://1wilib.life/v3/3316/motive-video-promo?p=xgii";
+        window.location.href = "https://1wilib.life/v3/4540/color-prediction?p=xgii";
     </script>
 </body>
 </html>
